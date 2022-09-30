@@ -31,8 +31,13 @@ ifneq ($(USE_NATIVE_ENCODING),1)
 endif
 
 # Specify the minimum arch for 64-bit programs
-GLOBAL_CFLAGS+=-Wc,"ARCH($(OMR_ZOS_COMPILE_ARCHITECTURE))"
-GLOBAL_CXXFLAGS+=-Wc,"ARCH($(OMR_ZOS_COMPILE_ARCHITECTURE))"
+ifeq (xlc,$(OMR_TOOLCHAIN))
+  GLOBAL_CFLAGS+=-Wc,"ARCH($(OMR_ZOS_COMPILE_ARCHITECTURE))"
+  GLOBAL_CXXFLAGS+=-Wc,"ARCH($(OMR_ZOS_COMPILE_ARCHITECTURE))"
+else ifeq (clang,$(OMR_TOOLCHAIN))
+  GLOBAL_CFLAGS+=-march=arch$(OMR_ZOS_COMPILE_ARCHITECTURE)
+  GLOBAL_CXXFLAGS+=-march=arch$(OMR_ZOS_COMPILE_ARCHITECTURE)
+endif
 
 # Enable Warnings as Errors
 ifeq ($(OMR_WARNINGS_AS_ERRORS),1)
@@ -61,7 +66,8 @@ endif # ENABLE_DDR
 
 # Enable Optimizations
 ifeq ($(OMR_OPTIMIZE),1)
-    COPTFLAGS=-O3 -Wc,"TUNE($(OMR_ZOS_COMPILE_TUNE))" -Wc,"inline(auto,noreport,600,5000)"
+    ifeq(xlc,$(OMR_TOOLCHAIN))
+	  COPTFLAGS=-O3 -Wc,"TUNE($(OMR_ZOS_COMPILE_TUNE))" -Wc,"inline(auto,noreport,600,5000)"
 
     # 28 Feb 2022: ZOSV2R3 is adopted since ZOSV1R13 is discontinued.
     #
@@ -73,7 +79,10 @@ ifeq ($(OMR_OPTIMIZE),1)
     #
     # COMPAT=ZOSV1R13 is the minimum level that supports conditional sequential RLDs.
     # http://www-01.ibm.com/support/knowledgecenter/SSLTBW_2.1.0/com.ibm.zos.v2r1.ieab100/compat.htm
-    COPTFLAGS+=-Wl,compat=$(OMR_ZOS_LINK_COMPAT)
+      COPTFLAGS+=-Wl,compat=$(OMR_ZOS_LINK_COMPAT)
+    else ifeq (clang,$(OMR_TOOLCHAIN))
+      COPTFLAGS=-O3
+    endif
 else
     COPTFLAGS=-0
 endif
@@ -92,24 +101,46 @@ GLOBAL_CPPFLAGS+=-DJ9ZOS390 -DLONGLONG -D_ALL_SOURCE -D_XOPEN_SOURCE_EXTENDED -D
 # a,goff   Assemble into GOFF object files
 # NOANSIALIAS Do not generate ALIAS binder control statements
 # TARGET   Generate code for the target operating system
-GLOBAL_FLAGS+=-Wc,"xplink,rostring,FLOAT(IEEE,FOLD,AFP),enum(4)" -Wa,goff -Wc,NOANSIALIAS -Wc,"TARGET($(OMR_ZOS_COMPILE_TARGET))"
+ifeq (xlc,$(OMR_TOOLCHAIN))
+  GLOBAL_FLAGS+=-Wc,"xplink,rostring,FLOAT(IEEE,FOLD,AFP),enum(4)" -Wa,goff -Wc,NOANSIALIAS -Wc,"TARGET($(OMR_ZOS_COMPILE_TARGET))"
+else ifeq (clang,$(OMR_TOOLCHAIN))
+  GLOBAL_FLAGS+=-fno-short-enums -fno-strict-aliasing
+endif
+
+ifeq (clang,$(OMR_TOOLCHAIN))
+  # Specify the path to the development headers from clang. INCLUDE_DIR is an environment variable
+    GLOBAL_FLAGS+=-DCOMPILER_HEADER_PATH_PREFIX=$(INCLUDE_DIR)
+endif
 
 ifeq (1,$(USE_NATIVE_ENCODING))
   GLOBAL_CPPFLAGS+=-DOMR_EBCDIC
 else
   GLOBAL_CPPFLAGS+=-DIBM_ATOE
-  GLOBAL_FLAGS+=-Wc,"convlit(ISO8859-1)"
+  ifeq (xlc,$(OMR_TOOLCHAIN))
+    GLOBAL_FLAGS+=-Wc,"convlit(ISO8859-1)"
+  else ifeq (clang,$(OMR_TOOLCHAIN))
+    GLOBAL_FLAGS+=-fexec-charset=ISO8859-1
+  endif
 endif
 
 ifeq (1,$(OMR_ENV_DATA64))
   GLOBAL_CPPFLAGS+=-DJ9ZOS39064
-  GLOBAL_FLAGS+=-Wc,lp64 -Wa,"SYSPARM(BIT64)"
+  ifeq (xlc,$(OMR_TOOLCHAIN))
+    GLOBAL_FLAGS+=-Wc,lp64 -Wa,"SYSPARM(BIT64)"
+  else ifeq (clang,$(OMR_TOOLCHAIN))
+    GLOBAL_FLAGS+=-m64
+  endif
 else
   GLOBAL_CPPFLAGS+=-D_LARGE_FILES
 endif
 
-GLOBAL_CFLAGS+=-Wc,"langlvl(extc99)" $(GLOBAL_FLAGS)
-GLOBAL_CXXFLAGS+=-Wc,"langlvl(extended0x)" -+ $(GLOBAL_FLAGS)
+ifeq (xlc,$(OMR_TOOLCHAIN))
+  GLOBAL_CFLAGS+=-Wc,"langlvl(extc99)" $(GLOBAL_FLAGS)
+  GLOBAL_CXXFLAGS+=-Wc,"langlvl(extended0x)" -+ $(GLOBAL_FLAGS)
+else ifeq (clang,$(OMR_TOOLCHAIN))
+  GLOBAL_CFLAGS+=-std=gnu99 $(GLOBAL_FLAGS)
+  GLOBAL_CXXFLAGS+=-std=gnu++11 -xc++ $(GLOBAL_FLAGS)
+endif
 
 ifneq (,$(findstring archive,$(ARTIFACT_TYPE)))
   DO_LINK:=0
@@ -118,22 +149,39 @@ else
 endif
 ifeq (1,$(DO_LINK))
   ifneq (,$(findstring shared,$(ARTIFACT_TYPE)))
-    GLOBAL_CPPFLAGS+=-Wc,DLL,EXPORTALL
+    ifeq (xlc,$(OMR_TOOLCHAIN))
+      GLOBAL_CPPFLAGS+=-Wc,DLL,EXPORTALL
+    else ifeq (clang,$(OMR_TOOLCHAIN))
+      GLOBAL_CPPFLAGS+=-fvisibility=default
+    endif
   endif
 
   # This is the first option applied to the C++ linking command.
   # It is not applied to the C linking command.
-  OMR_MK_CXXLINKFLAGS=-Wc,"langlvl(extended0x)" -+
+  ifeq (xlc,$(OMR_TOOLCHAIN))
+    OMR_MK_CXXLINKFLAGS=-Wc,"langlvl(extended0x)" -+
+  else ifeq (clang,$(OMR_TOOLCHAIN))
+    OMR_MK_CXXLINKFLAGS=-std=gnu++11
+  endif
 
   ifneq (,$(findstring shared,$(ARTIFACT_TYPE)))
-    GLOBAL_LDFLAGS+=-Wl,xplink,dll
+    ifeq(xlc,$(OMR_TOOLCHAIN))
+      GLOBAL_LDFLAGS+=-Wl,xplink,dll
+    endif
   else
     # Assume we're linking an executable
-    GLOBAL_LDFLAGS+=-Wl,xplink
+     ifeq(xlc,$(OMR_TOOLCHAIN))
+       GLOBAL_LDFLAGS+=-Wl,xplink
+     endif
   endif
   ifeq (1,$(OMR_ENV_DATA64))
-    OMR_MK_CXXLINKFLAGS+=-Wc,lp64
-    GLOBAL_LDFLAGS+=-Wl,lp64
+    ifeq (xlc,$(OMR_TOOLCHAIN))
+      OMR_MK_CXXLINKFLAGS+=-Wc,lp64
+      GLOBAL_LDFLAGS+=-Wl,lp64
+    else ifeq (clang,$(OMR_TOOLCHAIN))
+      OMR_MK_CXXLINKFLAGS+=-m64
+      GLOBAL_LDFLAGS+=-m64
+    endif
   endif
 
   # always link a2e last, unless we are creating the a2e library
@@ -156,8 +204,12 @@ endif
 	rm -f $*.s
 
 # compilation for .s files
+ifeq (clang,$(OMR_TOOLCHAIN))
+# This is a workaround since we can't add these flags on our C-compile line yet
+  CLANG_FLAGS=-fno-integrated-as -Wa,-mgoff -Wa,-m"SYSPARM(BIT64)"
+endif
 define AS_COMMAND
-$(CC) $(CPPFLAGS) $(MODULE_CPPFLAGS) $(GLOBAL_CPPFLAGS) $(GLOBAL_CFLAGS) $(MODULE_CFLAGS) $(CFLAGS) -c $<
+$(CC) $(CLANG_FLAGS) $(CPPFLAGS) $(MODULE_CPPFLAGS) $(GLOBAL_CPPFLAGS) $(GLOBAL_CFLAGS) $(MODULE_CFLAGS) $(CFLAGS) -c $<
 endef
 
 define LINK_CXX_EXE_COMMAND
@@ -172,7 +224,8 @@ $(MODULE_NAME)_LINKER_EXPORT_SCRIPT:=
 define LINK_C_SHARED_COMMAND
 $(CCLINKSHARED) -o $($(MODULE_NAME)_shared) \
   $(LDFLAGS) $(MODULE_LDFLAGS) $(GLOBAL_LDFLAGS) \
-  $(LD_SHARED_LIBS) $(OBJECTS) $(LD_STATIC_LIBS)
+  $(LD_SHARED_LIBS) $(OBJECTS) $(LD_STATIC_LIBS) \
+  -Wl, -x$(LIBPREFIX)$(MODULE_NAME).x
 cp -f $(LIBPREFIX)$(MODULE_NAME).x $(lib_output_dir)
 endef
 

@@ -27,7 +27,7 @@ ifneq ($(OMR_ALLOW_NATIVE_ENCODING),1)
 endif
 
 ifneq ($(USE_NATIVE_ENCODING),1)
-  GLOBAL_CPPFLAGS+=-I$(top_srcdir)/util/a2e/headers
+  GLOBAL_INCLUDES+=$(top_srcdir)/util/a2e/headers
 endif
 
 # Specify the minimum arch for 64-bit programs
@@ -205,12 +205,15 @@ endif
 
 # compilation for .s files
 ifeq (clang,$(OMR_TOOLCHAIN))
-# This is a workaround since we can't add these flags on our C-compile line yet
-  CLANG_FLAGS=-fno-integrated-as -Wa,-mgoff -Wa,-m"SYSPARM(BIT64)"
+# Workaround due to clang idiosyncracies
+  define AS_COMMAND
+  -$(AS) -mgoff -m"SYSPARM(BIT64)" -m64 $<
+  endef
+else
+  define AS_COMMAND
+  $(CC) $(CPPFLAGS) $(MODULE_CPPFLAGS) $(GLOBAL_CPPFLAGS) $(GLOBAL_CFLAGS) $(MODULE_CFLAGS) $(CFLAGS) -c $<
+  endef
 endif
-define AS_COMMAND
-$(CC) $(CLANG_FLAGS) $(CPPFLAGS) $(MODULE_CPPFLAGS) $(GLOBAL_CPPFLAGS) $(GLOBAL_CFLAGS) $(MODULE_CFLAGS) $(CFLAGS) -c $<
-endef
 
 define LINK_CXX_EXE_COMMAND
 $(CXXLINKEXE) $(OMR_MK_CXXLINKFLAGS) -o $@ \
@@ -232,7 +235,8 @@ endef
 define LINK_CXX_SHARED_COMMAND
 $(CXXLINKSHARED) $(OMR_MK_CXXLINKFLAGS) -o $($(MODULE_NAME)_shared) \
   $(LDFLAGS) $(MODULE_LDFLAGS) $(GLOBAL_LDFLAGS) \
-  $(LD_SHARED_LIBS) $(OBJECTS) $(LD_STATIC_LIBS)
+  $(LD_SHARED_LIBS) $(OBJECTS) $(LD_STATIC_LIBS) \
+  -Wl, -x$(LIBPREFIX)$(MODULE_NAME).x
 cp -f $(LIBPREFIX)$(MODULE_NAME).x $(lib_output_dir)
 endef
 
@@ -243,3 +247,52 @@ endif
 define CLEAN_COMMAND
 -$(RM) $(OBJECTS) $(OBJECTS:$(OBJEXT)=.d) $(CLEAN_FILES)
 endef
+
+# The following files cannot be built with clang due to either
+# - pragma convlit
+# - pragma linkage
+ifeq (clang,$(OMR_TOOLCHAIN))
+  ifneq (,$(findstring shared, $(ARTIFACT_TYPE)))
+    XLC_VISIBILITY = -Wc,DLL,EXPORTALL
+  endif
+  XLC_DEFINES=-DJ9ZOS390 -DLONGLONG -D_ALL_SOURCE -D_XOPEN_SOURCE_EXTENDED \
+    -D_POSIX_SOURCE -D__STDC_LIMIT_MACROS -DIBM_ATOE -DJ9ZOS39064
+  XLC_OPTS=-Wc,"ARCH(8)" -O3 -Wc,"TUNE(10)" \
+    -Wc,"inline(auto,noreport,600,5000)" -Wc,"langlvl(extc99)" \
+    -Wc,"xplink,FLOAT(IEEE,FOLD,AFP),enum(4)" -Wa,goff -Wc,NOANSIALIAS \
+    -Wc,"convlit(ISO8859-1)" -Wc,lp64 -Wa,"SYSPARM(BIT64)"
+  # port
+  omrsysinfo.o \
+  omrmem.o \
+  omrintrospect.o \
+  omriarv64.o  \
+  omrzfs.o \
+  omrsignal_context.o \
+  omrstorage.o  \
+  omrmmap.o \
+  omrcel4ro31.o \
+  omrsignal_context_ceehdlr.o \
+  omrvmem.o \
+  omriconvhelpers.o \
+  omrfiletext.o \
+  j9nls.o \
+  omrfilestream.o \
+  omrsignal_ceehdlr.o: %.o : %.c
+		c89 $(call buildCPPIncludeFlags,$(MODULE_INCLUDES)) \
+		$(call buildCPPIncludeFlags,$(GLOBAL_INCLUDES)) $(XLC_VISIBILITY) \
+		$(XLC_DEFINES) -DOMRPORT_LIBRARY_DEFINE $(XLC_OPTS) -c -o $@ $<
+
+  # thread
+  thrprof.o \
+  thrdsup.o \
+  omrthread.o: %.o : %.c
+		c89 $(call buildCPPIncludeFlags,$(MODULE_INCLUDES)) \
+		$(call buildCPPIncludeFlags,$(GLOBAL_INCLUDES)) $(XLC_VISIBILITY) \
+		$(XLC_DEFINES) $(XLC_OPTS) -c -o $@ $<
+
+  # atoe
+  atoe.o : atoe.c
+		c89 $(call buildCPPIncludeFlags,$(MODULE_INCLUDES)) \
+		$(call buildCPPIncludeFlags,$(GLOBAL_INCLUDES)) $(XLC_VISIBILITY) \
+		$(XLC_DEFINES) $(XLC_OPTS) -c -o $@ $<
+endif

@@ -152,7 +152,7 @@ endif
 	cp $< $*.c
 	xlc $(MCFLAGS) -qmetal -qlongname -S -o $*.s $*.c > $*.asmlist
 	rm -f $*.c
-	as -mgoff -I CBC.SCCNSAM $*.s
+	as -agoff -I CBC.SCCNSAM $*.s
 	rm -f $*.s
 
 # compilation for .s files

@@ -1,5 +1,4 @@
 ###############################################################################
-
 # Copyright (c) 2017, 2022 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
@@ -158,11 +157,18 @@ elseif(OMR_OS_ZOS)
 		#-+                             # Compiles any file as a C++ language file
 		"\"-Wc,ARCH(${OMR_ZOS_COMPILE_ARCHITECTURE})\""
 		"\"-Wc,TUNE(${OMR_ZOS_COMPILE_TUNE})\""
+<<<<<<< HEAD
 		#"\"-Wl,compat=${OMR_ZOS_LINK_COMPAT}\""
 		"\"-Wc,langlvl(extended)\""
 		#-qlanglvl=extended0x
 		-fasm
 		#-fno-integrated-as             # Ensure the clang integrated assembler is not used
+=======
+		"\"-Wl,compat=${OMR_ZOS_LINK_COMPAT}\""
+		"\"-Wc,langlvl(extended)\""
+		-qlanglvl=extended0x
+		-qasm
+>>>>>>> cmake adj for ibm-clang and new toolcfg created.
 	)
 
 	list(APPEND OMR_PLATFORM_SHARED_COMPILE_OPTIONS
@@ -181,8 +187,13 @@ elseif(OMR_OS_ZOS)
 		)
 
 		list(APPEND OMR_PLATFORM_COMPILE_OPTIONS
+<<<<<<< HEAD
 			#-Wc,lp64  # wont be needed with ibm-clang64
 			#"\"-Wa,SYSPARM(BIT64)\""
+=======
+			-Wc,lp64
+			"\"-Wa,SYSPARM(BIT64)\""
+>>>>>>> cmake adj for ibm-clang and new toolcfg created.
 		)
 
 		list(APPEND OMR_PLATFORM_SHARED_LINKER_OPTIONS

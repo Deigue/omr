@@ -133,7 +133,7 @@ elseif(OMR_OS_ZOS)
 		"\"-Wc,rostring\""             # place string literals in read only storage
 		"\"-Wc,FLOAT(IEEE,FOLD,AFP)\"" # Use IEEE (instead of IBM Hex Format) style floats
 		"\"-Wc,enum(4)\""              # Specifies how many bytes of storage enums occupy
-		"\"-Wa,goff\""                 # Assemble into GOFF object files
+		#"\"-Wa,goff\""                 # Assemble into GOFF object files
 		"\"-Wc,NOANSIALIAS\""          # Do not generate ALIAS binder control statements
 		"\"-Wc,TARGET(${OMR_ZOS_COMPILE_TARGET})\""     # Generate code for the target operating system
 	)
@@ -149,10 +149,10 @@ elseif(OMR_OS_ZOS)
 		#-+                             # Compiles any file as a C++ language file
 		"\"-Wc,ARCH(${OMR_ZOS_COMPILE_ARCHITECTURE})\""
 		"\"-Wc,TUNE(${OMR_ZOS_COMPILE_TUNE})\""
-		"\"-Wl,compat=${OMR_ZOS_LINK_COMPAT}\""
+		#"\"-Wl,compat=${OMR_ZOS_LINK_COMPAT}\""
 		"\"-Wc,langlvl(extended)\""
-		-qlanglvl=extended0x
-		-qasm
+		#-qlanglvl=extended0x
+		-fasm
 	)
 
 	list(APPEND OMR_PLATFORM_SHARED_COMPILE_OPTIONS
@@ -171,8 +171,8 @@ elseif(OMR_OS_ZOS)
 		)
 
 		list(APPEND OMR_PLATFORM_COMPILE_OPTIONS
-			-Wc,lp64
-			"\"-Wa,SYSPARM(BIT64)\""
+			#-Wc,lp64  # wont be needed with ibm-clang64
+			#"\"-Wa,SYSPARM(BIT64)\""
 		)
 
 		list(APPEND OMR_PLATFORM_SHARED_LINKER_OPTIONS

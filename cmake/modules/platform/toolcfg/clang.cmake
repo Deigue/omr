@@ -128,6 +128,10 @@ elseif(OMR_OS_ZOS)
 	set(OMR_C_ENHANCED_WARNINGS_FLAG )
 	set(OMR_CXX_ENHANCED_WARNINGS_FLAG )
 
+	list(APPEND CMAKE_ASM_FLAGS
+		-fno-integrated-as
+	)
+
 	list(APPEND OMR_PLATFORM_COMPILE_OPTIONS
 		"\"-Wc,xplink\""               # link with xplink calling convention
 		"\"-Wc,rostring\""             # place string literals in read only storage
@@ -153,6 +157,7 @@ elseif(OMR_OS_ZOS)
 		"\"-Wc,langlvl(extended)\""
 		#-qlanglvl=extended0x
 		-fasm
+		#-fno-integrated-as             # Ensure the clang integrated assembler is not used
 	)
 
 	list(APPEND OMR_PLATFORM_SHARED_COMPILE_OPTIONS

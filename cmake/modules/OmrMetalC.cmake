@@ -39,7 +39,7 @@ find_program(XLC_EXECUTABLE
 )
 
 set(OMR_METALC_XLC_FLAGS "-qlongname" "-qnosearch" "-I/usr/include/metal/" CACHE STRING "Options added to XLC when compiler METAL-C to HLASM")
-set(OMR_METALC_ASM_FLAGS "-agoff" "-I" "CBC.SCCNSAM" CACHE STRING "Options added when compiling METAL-C HLASM files")
+set(OMR_METALC_ASM_FLAGS "-mgoff" "-I" "CBC.SCCNSAM" CACHE STRING "Options added when compiling METAL-C HLASM files")
 
 
 # omr_compile_metalc(<mfile> <ofile>)

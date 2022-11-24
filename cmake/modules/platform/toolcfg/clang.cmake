@@ -1,4 +1,5 @@
 ###############################################################################
+
 # Copyright (c) 2017, 2022 IBM Corp. and others
 #
 # This program and the accompanying materials are made available under
@@ -128,16 +129,20 @@ elseif(OMR_OS_ZOS)
 	set(OMR_C_ENHANCED_WARNINGS_FLAG )
 	set(OMR_CXX_ENHANCED_WARNINGS_FLAG )
 
-	list(APPEND CMAKE_ASM_FLAGS
-		-fno-integrated-as
-	)
+	#list(APPEND CMAKE_ASM_FLAGS
+	#	"-fno-integrated-as"
+	#	"\"-Wa,-mgoff\""
+	#)
+	
+	set(CMAKE_ASM_FLAGS "-fno-integrated-as")
+	string(APPEND CMAKE_ASM_FLAGS " \"-Wa,-mgoff\"")
 
 	list(APPEND OMR_PLATFORM_COMPILE_OPTIONS
 		"\"-Wc,xplink\""               # link with xplink calling convention
 		"\"-Wc,rostring\""             # place string literals in read only storage
 		"\"-Wc,FLOAT(IEEE,FOLD,AFP)\"" # Use IEEE (instead of IBM Hex Format) style floats
 		"\"-Wc,enum(4)\""              # Specifies how many bytes of storage enums occupy
-		#"\"-Wa,goff\""                 # Assemble into GOFF object files
+		#"\"-Wa,goff\""                 # Assemble into GOFF object file
 		"\"-Wc,NOANSIALIAS\""          # Do not generate ALIAS binder control statements
 		"\"-Wc,TARGET(${OMR_ZOS_COMPILE_TARGET})\""     # Generate code for the target operating system
 	)

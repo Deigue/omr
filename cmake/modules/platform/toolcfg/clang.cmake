@@ -136,6 +136,7 @@ elseif(OMR_OS_ZOS)
 	
 	set(CMAKE_ASM_FLAGS "-fno-integrated-as")
 	string(APPEND CMAKE_ASM_FLAGS " \"-Wa,-mgoff\"")
+	string(APPEND CMAKE_ASM_FLAGS " \"-Wa,-mSYSPARM(BIT64)\"")
 
 	list(APPEND OMR_PLATFORM_COMPILE_OPTIONS
 		"\"-Wc,xplink\""               # link with xplink calling convention

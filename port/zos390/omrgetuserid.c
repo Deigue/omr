@@ -34,6 +34,7 @@
 
 #define J9_MAX_USERID 16
 
+
 /**
  * Get the userid for a z/OS job.
  *

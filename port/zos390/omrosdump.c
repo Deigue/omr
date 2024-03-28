@@ -48,6 +48,7 @@
 #endif
 #include "portnls.h"
 
+
 static void convertToUpper(struct OMRPortLibrary *portLibrary, char *toConvert, uintptr_t len);
 static void appendCoreName(struct OMRPortLibrary *portLibrary, char *corepath, intptr_t pathBufferLimit, intptr_t pid);
 static uintptr_t tdump_wrapper(struct OMRPortLibrary *portLibrary, char *filename, char *dsnName);

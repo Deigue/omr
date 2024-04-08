@@ -24,6 +24,7 @@
 # ARCHIVE_DIR - Archive directory for the target
 # RUNTIME_DIR - Runtime directory for the target
 # BINARY_DIR - CMake Binary Dir for the library target
+# OMR_TOOLCONFIG - Name of toolchain config options to use
 
 # xlc creates the output file name by taking the name of the generated library
 # and change the file exentsion to .x. (or appending if no extension exists)
@@ -37,7 +38,7 @@ if(NOT ARCHIVE_DIR)
 	set(ARCHIVE_DIR ${RUNTIME_DIR})
 endif()
 
-if(NOT EXISTS "${ARCHVIVE_DIR}")
+if(NOT EXISTS "${ARCHIVE_DIR}")
 	file(MAKE_DIRECTORY "${ARCHIVE_DIR}")
 endif()
 string(FIND "${LIBRARY_FILE_NAME}" "." dot_pos REVERSE)
@@ -45,7 +46,8 @@ string(SUBSTRING "${LIBRARY_FILE_NAME}" 0 ${dot_pos} base_name)
 
 set(SRC_FILE "${CMAKE_BINARY_DIR}/${base_name}.x")
 set(DEST_FILE "${ARCHIVE_DIR}/${base_name}.x")
-if(NOT "${SRC_FILE}" STREQUAL "${DEST_FILE}")
+
+if((NOT "${SRC_FILE}" STREQUAL "${DEST_FILE}") AND (NOT ${OMR_TOOLCONFIG} STREQUAL "openxl"))
 	file(RENAME "${SRC_FILE}" "${DEST_FILE}")
 endif()
 

@@ -52,6 +52,6 @@ if((NOT "${SRC_FILE}" STREQUAL "${DEST_FILE}") AND (NOT ${OMR_TOOLCONFIG} STREQU
 endif()
 
 # Work around a bug in CMake where it looks for .x files in the runime dir rather than the archive dir.
-if(NOT "${ARCHIVE_DIR}" STREQUAL "${RUNTIME_DIR}")
+if((NOT "${ARCHIVE_DIR}" STREQUAL "${RUNTIME_DIR}") AND (NOT ${OMR_TOOLCONFIG} STREQUAL "openxl"))
 	file(COPY "${DEST_FILE}" DESTINATION "${RUNTIME_DIR}")
 endif()

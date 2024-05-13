@@ -478,7 +478,7 @@ struct _RTL_CRITICAL_SECTION;
 // detecting whether they are enabled or not.  Therefore, we assume that
 // they are enabled unless the user tells us otherwise.
 #  define GTEST_HAS_EXCEPTIONS 1
-# elif (defined(__IBMCPP__) || defined(__open_xl__) && defined(__cplusplus)) && __EXCEPTIONS
+# elif (defined(__IBMCPP__) || (defined(__open_xl__) && defined(__cplusplus))) && __EXCEPTIONS
 // xlC defines __EXCEPTIONS to 1 iff exceptions are enabled.
 #  define GTEST_HAS_EXCEPTIONS 1
 # elif defined(__HP_aCC)

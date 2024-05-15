@@ -354,15 +354,20 @@ tdump(struct OMRPortLibrary *portLibrary, char *asciiLabel, char *ebcdicLabel, u
 		return 2;
 	}
 	memset(dsnPattern31, 0, sizeof(*dsnPattern31));
-
+    
 	strcpy(dsnPattern31->dsn, ebcdicLabel);
 	dsnPattern31->len = strlen(ebcdicLabel);
-
 	/* Note: the actual IEATDUMP options are specified on the assembler macro call in omrgenerate_ieat_dumps.s. The
 	 * message below needs to be kept consistent with the options set on the macro call.
 	 */
+	omrtty_err_printf(portLibrary, "%s\n",dsnPattern31);
 	omrtty_err_printf(portLibrary, "IEATDUMP in progress with options SDATA=(LPA,GRSQ,LSQA,NUC,PSA,RGN,SQA,SUM,SWA,TRT)\n");
-
+	omrtty_err_printf(portLibrary,"ioparm-size: %d dsnpattern-size %d dsnpattern-len %d \n", sizeof(*ioParms31), sizeof(*dsnPattern31),  dsnPattern31->len);
+	omrtty_err_printf(portLibrary,"dsnPattern->dsn offset: %d\n", offsetof(struct dsn_pattern_t, dsn));
+	omrtty_err_printf(portLibrary, "Contents of DSNName: %p\n", *((int**)dsnPattern31->dsn));
+	omrtty_err_printf(portLibrary, "ioparms address: %p\n\n", ioParms31);
+	omrtty_err_printf(portLibrary, "dsnPattern address: %p\n\n", dsnPattern31);
+	//*((int*)0)=1;
 	_TDUMP(ioParms31, dsnPattern31);
 
 	if (returnCode) {

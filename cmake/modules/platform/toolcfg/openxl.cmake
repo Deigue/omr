@@ -121,6 +121,8 @@ elseif(OMR_OS_ZOS)
 	set(CMAKE_SHARED_LIBRARY_CREATE_C_FLAGS "--shared")
 	set(CMAKE_SHARED_LIBRARY_CREATE_CXX_FLAGS "--shared")
 
+	set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+	set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 
 	set(CMAKE_ASM_FLAGS "-fno-integrated-as")
 	string(APPEND CMAKE_ASM_FLAGS " \"-Wa,-mgoff\"")

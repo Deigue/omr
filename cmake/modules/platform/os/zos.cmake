@@ -21,6 +21,13 @@
 
 list(APPEND OMR_PLATFORM_DEFINITIONS
 	-D_ALL_SOURCE
+<<<<<<< HEAD
+=======
+	-D_XOPEN_SOURCE=600
+	-D_OPEN_THREADS=3
+	-D__STDC_LIMIT_MACROS
+	-DLONGLONG
+>>>>>>> 7b1cebd3c (PR7321: Adjust zos flags to remove unnecessary thrdsup.c declarations)
 	-DJ9ZOS390
 	-DLONGLONG
 	-D_OPEN_THREADS=3

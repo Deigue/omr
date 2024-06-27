@@ -24,6 +24,7 @@
  * @ddr_namespace: default
  */
 
+<<<<<<< HEAD
                    #ifndef __edcwccwi
                    #ifdef __COMPILER_VER__
                      #pragma filetag("IBM-1047")
@@ -34,6 +35,18 @@
 
   #if defined(__IBM_METAL__)
 
+=======
+                   #ifndef __edcwccwi                                         
+                   #ifdef __COMPILER_VER__                                    
+                     #pragma filetag("IBM-1047")                              
+                   #endif                                                     
+                   #define __edcwccwi 1                                         
+                   #pragma nomargins nosequence                                 
+                   #pragma checkout(suspend)                                    
+                                                                                
+  #if defined(__IBM_METAL__)                                                    
+                                                                                
+>>>>>>> 868f9ce01 (Fix Open XL warnings in headers)
     #error Language Environment standard C headers \
 cannot be used when METAL option is used. \
 Correct your header search path.
@@ -328,6 +341,7 @@ struct __jumpinfo
 } __jumpinfo_t;
 
 
+<<<<<<< HEAD
 /**********************************************************************
  *  __far_jump()  -- perform far jump                                 *
  **********************************************************************
@@ -368,6 +382,35 @@ __set_stack_softlimit
 
 typedef
 struct __laa_jit_s {
+=======
+#if !defined(_LP64)                                                             
+#if defined(__XPLINK__)                                                         
+                                                                                
+/*******************************************************************            
+ *  __set_stack_softlimit() -- Set stack softlimit                 *            
+ *******************************************************************            
+ */                                                                             
+                                                                                
+unsigned long                    /* returns the previous value of the           
+                                    softlimit (ULONG_MAX returned if            
+                                    first call)                      */         
+__set_stack_softlimit                                                           
+(                                                                               
+  unsigned long                  /* soft limit stack size in bytes   */         
+                                                                                
+);                                                                              
+                                                                                
+#endif /* __XPLINK__  */                                                        
+#else                                                                           
+  #define __set_stack_softlimit(a) \
+    struct __no64bitSupport __set_stack_softlimit                               
+#endif /* ! _LP64 */                                                            
+                                                                                
+#ifdef _LP64                                                                    
+                                                                                
+typedef                                                                         
+struct __laa_jit_s {                                                            
+>>>>>>> 868f9ce01 (Fix Open XL warnings in headers)
  void *   user_data1;
  void *   user_data2;
 } __laa_jit_t;

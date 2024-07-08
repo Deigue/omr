@@ -271,7 +271,11 @@ void TR_LinuxCallStackIterator::printStackBacktrace(TR::Compilation *comp)
 
 #if !defined(__open_xl__)
 extern "builtin" void *__gdsa();
+<<<<<<< HEAD
 #endif /* !defined(__open_xl__) */
+=======
+#endif
+>>>>>>> 0ef202049 (Fix builtin function call for Open XL (Open J9))
 
 TR_MvsCallStackIterator::TR_MvsCallStackIterator ()
       : TR_CallStackIterator()

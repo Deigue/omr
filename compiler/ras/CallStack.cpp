@@ -272,10 +272,14 @@ void TR_LinuxCallStackIterator::printStackBacktrace(TR::Compilation *comp)
 #if !defined(__open_xl__)
 extern "builtin" void *__gdsa();
 <<<<<<< HEAD
+<<<<<<< HEAD
 #endif /* !defined(__open_xl__) */
 =======
 #endif
 >>>>>>> 0ef202049 (Fix builtin function call for Open XL (Open J9))
+=======
+#endif // !defined(__open_xl__)
+>>>>>>> 1870c04f7 (added comments for CallStack.cpp)
 
 TR_MvsCallStackIterator::TR_MvsCallStackIterator ()
       : TR_CallStackIterator()
@@ -284,7 +288,11 @@ TR_MvsCallStackIterator::TR_MvsCallStackIterator ()
    _parms.__tf_dsa_addr = (void*)__builtin_s390_gdsa();
 #else /* defined(__open_xl__) */
    _parms.__tf_dsa_addr = (void*)__gdsa();
+<<<<<<< HEAD
 #endif /* defined(__open_xl__) */
+=======
+#endif // defined(__open_xl__)
+>>>>>>> 1870c04f7 (added comments for CallStack.cpp)
    _parms.__tf_caa_addr = (void*)__gtca();
    _parms.__tf_call_instruction = 0;
    _parms.__tf_pu_addr = 0;

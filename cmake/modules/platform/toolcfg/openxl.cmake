@@ -19,17 +19,6 @@
 # SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0 OR GPL-2.0-only WITH OpenJDK-assembly-exception-1.0
 ###############################################################################
 
-if(CMAKE_C_COMPILER_IS_XLCLANG)
-	macro(omr_toolconfig_global_setup)
-		# For XLClang, remove any usages of -qhalt=e or -qhalt=s provided by default
-		# in the CMAKE CXX/C/ASM FLAGS, since xlclang/xlclang++ are not compatible
-		# with the e or s options.
-		omr_remove_flags(CMAKE_ASM_FLAGS -qhalt=e)
-		omr_remove_flags(CMAKE_C_FLAGS   -qhalt=e)
-		omr_remove_flags(CMAKE_CXX_FLAGS -qhalt=s)
-	endmacro(omr_toolconfig_global_setup)
-endif()
-
 if(OMR_OS_AIX)
 	list(APPEND OMR_PLATFORM_C_COMPILE_OPTIONS -qlanglvl=extended)
 	list(APPEND OMR_PLATFORM_CXX_COMPILE_OPTIONS -qlanglvl=extended0x)

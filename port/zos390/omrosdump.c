@@ -333,7 +333,7 @@ tdump_wrapper(struct OMRPortLibrary *portLibrary, char *filename, char *dsnName)
 static intptr_t
 tdump(struct OMRPortLibrary *portLibrary, char *asciiLabel, char *ebcdicLabel, uint32_t *returnCode, uint32_t *reasonCode)
 {
-	struct ioparmss_t {
+	struct ioparms_t {
 		uint64_t plist[256];
 		uint32_t retcode;
 		uint32_t rsncode;

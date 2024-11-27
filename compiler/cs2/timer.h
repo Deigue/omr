@@ -81,7 +81,7 @@ class AIXTimer {
 };
 
 typedef AIXTimer PlatformTimer;
-#elif defined(LINUX) || defined(OSX) || defined (__MVS__)
+#elif defined(LINUX) || defined(OSX) || defined(__MVS__)
 /**
  * \brief Linux-specific timer class.
  *

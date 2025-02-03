@@ -50,6 +50,7 @@
 
 #endif /* !defined(ATOMIC_SUPPORT_STUB) */
 
+
 #include "omrcfg.h"
 #include "omrcomp.h"
 #include "omrutilbase.h"

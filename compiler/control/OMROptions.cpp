@@ -1370,21 +1370,15 @@ OMR::Options::getNumericValue(const char *& option)
     * unexpected to tolerate.  Hence we must do a slightly more complex thing
     * here to make the operations left-associative.
     */
-   printf("OMROptions.cpp:1373(getNumericValue) = %s\n", option);
-   for(int i=0; i < sizeof(option); i++) {
-   printf("OMROptions.cpp:1375(option hex) = %02X\n", option[i]);
-}
    int64_t result  = 0;
    char pendingOperation = '+';
    while (pendingOperation)
       {
       int64_t current = 0;
-      printf("OMROptions.cpp:1382(getNumericValue:while(pendingOpt) current= %d option= %s\n", current, option);
-      while (isdigit(*option))
+      while (isdigitcpp(*option))
          {
          current = 10 * current + *option - '0';
          option++;
-         printf("OMROptions.cpp:1387(getNumericValue:isdigit) current= %d option= %s\n", current, option);
          }
       switch (pendingOperation)
          {
@@ -1408,7 +1402,6 @@ OMR::Options::getNumericValue(const char *& option)
             break;
          }
       }
-   printf("OMROptions.cpp:1411(getNumericOption) result = %d option = %s\n", result, option);
    return result;
    }
 
@@ -2541,9 +2534,7 @@ OMR::Options::processOptionsAOT(const char *aotOptions, void *feBase, TR_FrontEn
       _aotCmdLineOptions->jitPreProcess();
 
       static char *envOptions = feGetEnv("TR_OptionsAOT");
-      printf("OMROptions.cpp:2544(-Xaot input) = %s\n", aotOptions);
       const char *rc = TR::Options::processOptions(aotOptions, envOptions, feBase, fe, _aotCmdLineOptions);
-      printf("OMROptions.cpp:2546(after processOptions[5args]) = %s\n", rc);
 
       _processOptionsStatus |= (NULL == rc)?TR_AOTProcessedOK : TR_AOTProcessErrorAOTOpts;
       return rc;
@@ -3283,7 +3274,6 @@ OMR::Options::processOptions(
    if (strlen(options) == 0 && !envOptions)
       {
       options = TR::Options::getDefaultOptions();
-      printf("OMROptions.cpp:3286(getDefaultOptions) = %s\n", options);
       }
 
    return TR::Options::processOptions(options, envOptions, cmdLineOptions);
@@ -3303,7 +3293,6 @@ OMR::Options::processOptions(const char *options, const char *envOptions, TR::Op
    cmdLineOptions->_startOptions = options;
    cmdLineOptions->_envOptions = envOptions;
 
-   printf("OMROptions.cpp:3306(in processOptions[3args]) = %s\n", options);
    options = TR::Options::processOptionSet(options, envOptions, cmdLineOptions, (cmdLineOptions == TR::Options::getAOTCmdLineOptions()));
    if (*options)
       return options;
@@ -3322,7 +3311,6 @@ OMR::Options::processOptions(const char *options, const char *envOptions, TR::Op
          return cmdLineOptions->_startOptions;
       }
 
-   printf("OMROptions.cpp:3325(after processOptions[3args]) = %s\n", options);
    return options;
    }
 
@@ -3365,7 +3353,6 @@ OMR::Options::processOptionSet(
       void *jitBase,
       bool isAOT)
    {
-   printf("OMROptions.cpp:3368(START processOptionSet) = %s\n", options);
    while (*options && *options != ')')
       {
       const char *endOpt = NULL;
@@ -3391,7 +3378,6 @@ OMR::Options::processOptionSet(
             if (!methodRegex)
                {
                TR_VerboseLog::writeLineLocked(TR_Vlog_FAILURE, "Bad regular expression at --> '%s'", endOpt);
-               printf("OMROptions.cpp:3394(bad regex at %s) = %s\n", endOpt, options);
                return options;
                }
 
@@ -3403,7 +3389,6 @@ OMR::Options::processOptionSet(
                if (!optLevelRegex)
                   {
                   TR_VerboseLog::writeLineLocked(TR_Vlog_FAILURE, "Bad regular expression at --> '%s'", endOpt);
-                  printf("OMROptions.cpp:3406(bad regex at %s) = %s\n", endOpt, options);
                   return options;
                   }
                }
@@ -3424,7 +3409,7 @@ OMR::Options::processOptionSet(
             options++;
             //assume this is a digit
             value=0;
-            while (isdigit(*options))
+            while (isdigitcpp(*options))
                {
                value = 10 * value + *options - '0';
                options++;
@@ -3441,7 +3426,7 @@ OMR::Options::processOptionSet(
                options++;
                //assume this is a digit
                value=0;
-               while (isdigit(*options))
+               while (isdigitcpp(*options))
                   {
                   value = 10*value + *options - '0';
                   options++;
@@ -3480,10 +3465,8 @@ OMR::Options::processOptionSet(
       //
       if (endOpt)
          {
-         if (*endOpt != '(') {
-            printf("OMROptions.cpp:3484(option subset exit %s) = %s\n", endOpt, options);
+         if (*endOpt != '(')
             return options;
-         }
          const char *startOptString = ++endOpt;
          int32_t parenNest = 1;
          for (; *endOpt; endOpt++)
@@ -3499,11 +3482,8 @@ OMR::Options::processOptionSet(
                   }
                }
             }
-         if (parenNest) {
-            printf("OMROptions.cpp:3503(parenNest empty) = %s\n", options);
+         if (parenNest)
             return options;
-         }
-            
 
          // Save the option set - its option string will be processed after
          // the main options have been finished.
@@ -3547,12 +3527,10 @@ OMR::Options::processOptionSet(
       else
          {
          endOpt = (char *)TR::Options::processOption(options, _jitOptions, jitBase, _numJitEntries, optionSet);
-         printf("OMROptions.cpp:3550(after processOption) = %s\n", endOpt);
 
          if (!endOpt)
             {
             TR_VerboseLog::writeLineLocked(TR_Vlog_FAILURE, "Unable to allocate option string");
-            printf("OMROptions.cpp:3555 (unable to alloc option) = %s\n", options);
             return options;
             }
 
@@ -3561,7 +3539,6 @@ OMR::Options::processOptionSet(
          if (!feEndOpt)
             {
             TR_VerboseLog::writeLineLocked(TR_Vlog_FAILURE, "Unable to allocate option string");
-            printf("OMROptions.cpp:3563 (unable to alloc option) = %s\n", options);
             return options;
             }
 
@@ -3572,7 +3549,6 @@ OMR::Options::processOptionSet(
          if (feEndOpt != options && optionSet)
             {
             TR_VerboseLog::writeLineLocked(TR_Vlog_FAILURE, "Option not allowed in option subset");
-            printf("OMROptions.cpp:3575 (option not allowed in option subset) = %s\n", options);
             return options;
             }
 
@@ -3580,7 +3556,6 @@ OMR::Options::processOptionSet(
             endOpt = (char *)feEndOpt;
          if (endOpt == options)
             {
-            printf("OMROptions.cpp:3583 (unrecognized option) = %s\n", options);
             return options; // Unrecognized option
             }
          }
@@ -3594,13 +3569,11 @@ OMR::Options::processOptionSet(
          }
       else if (*endOpt && *endOpt != ')')
          {
-         printf("OMROptions.cpp:3597 (missing separator @ %s) = %s\n", endOpt, options);
          return options;  // Missing separator
          }
       options = endOpt;
       break;
       }
-   printf("OMROptions.cpp:3603(after processOptionSet[post regex]) = %s\n", options);
    return options;
    }
 
@@ -3679,7 +3652,6 @@ OMR::Options::processOption(
       ++option;
       }
 
-   printf("OMROptions.cpp:3682(processOption) = %s\n", option);
    // Set the length of all options in the table and set the isOptionToFind
    // field to false.
    for (TR::OptionTable* i = table; i < (table + numEntries); i++)
@@ -3709,7 +3681,6 @@ OMR::Options::processOption(
    first = equalRange.first;
    last = equalRange.second;
 
-   printf("OMROptions.cpp:3712(option table first,last) = (%s, %s)\n", first->name, last->name);
    if (first == last)
       {
       // optionToFind not found in the table
@@ -3761,7 +3732,7 @@ OMR::Options::processOption(
       {
       processingMethod = opt->fcn;
       }
-   printf("OMROptions.cpp:3764(processOption) opt= %s opt->length = %d\n", opt->name, opt->length) ;
+
    // Process this entry
    //
    const char *retVal = processingMethod(option + opt->length, base, opt);
@@ -4395,10 +4366,10 @@ OMR::Options::setCounts()
          {
          while (s[0] == ' ')
             ++s;
-         if (isdigit(s[0]))
+         if (isdigitcpp(s[0]))
             {
             count[i] = atoi(s);
-            while(isdigit(s[0]))
+            while(isdigitcpp(s[0]))
                ++s;
             if (initialCount >= 0)
                {
@@ -4420,10 +4391,10 @@ OMR::Options::setCounts()
             count[i] = -1;
          while (s[0] == ' ')
             ++s;
-         if (isdigit(s[0]))
+         if (isdigitcpp(s[0]))
             {
             bcount[i] = atoi(s);
-            while(isdigit(s[0]))
+            while(isdigitcpp(s[0]))
                ++s;
             if (initialBCount >= 0)
                {
@@ -4443,10 +4414,10 @@ OMR::Options::setCounts()
          bcount[i] = -1;
          while (s[0] == ' ')
             ++s;
-         if (isdigit(s[0]))
+         if (isdigitcpp(s[0]))
             {
             milcount[i] = atoi(s);
-            while(isdigit(s[0]))
+            while(isdigitcpp(s[0]))
                ++s;
             if (initialMILCount >= 0)
                {

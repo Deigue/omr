@@ -2347,7 +2347,6 @@ iconv_init(void)
 	iconv_close(etoa_cd);
 
 	/* Build integer test macros flag table */
-    printf("BUILD ascii_is_tab table\n");
 	for (i = 0; i < CONV_TABLE_SIZE; i++) {
 		_ascii_is_tab[i] = 0;
 		if (isalnum(a2e_tab[i])) _ascii_is_tab[i] |=  _ISALNUM_ASCII;
@@ -2361,7 +2360,6 @@ iconv_init(void)
 		if (isspace(a2e_tab[i])) _ascii_is_tab[i] |=  _ISSPACE_ASCII;
 		if (isupper(a2e_tab[i])) _ascii_is_tab[i] |=  _ISUPPER_ASCII;
 		if (isxdigit(a2e_tab[i])) _ascii_is_tab[i] |=  _ISXDIGIT_ASCII;
-        printf("i=%d, a2e_tab[i]=%c, _ascii_is_tab[i]=%d (%X)\n", i, a2e_tab[i], _ascii_is_tab[i], _ascii_is_tab[i]);
 	}
 
 	/* Now we handle libwrappers.so:iconv_init as well */

@@ -81,6 +81,7 @@
                 #define isalpha(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISALPHA_ASCII) : 0)
                 #define iscntrl(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISCNTRL_ASCII) : 0)
                 #define isdigit(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISDIGIT_ASCII) : 0)
+                #define isdigitcpp(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISDIGIT_ASCII) : 0)
                 #define isgraph(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISGRAPH_ASCII) : 0)
                 #define islower(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISLOWER_ASCII) : 0)
                 #define isprint(c)     (_IN_RANGE(c) ? (_ascii_is_tab[c] & _ISPRINT_ASCII) : 0)

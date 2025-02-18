@@ -268,7 +268,6 @@ endif()
 if(OMR_OS_ZOS)
 	list(APPEND VPATH zos390)
 	target_include_directories(omrport_obj PRIVATE zos390)
-	set_property(SOURCE "zos390/omrzfs.c" APPEND PROPERTY COMPILE_FLAGS "-O0")
 endif()
 
 if(OMR_OS_WINDOWS)

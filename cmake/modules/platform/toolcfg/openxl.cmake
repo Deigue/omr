@@ -19,32 +19,8 @@
 # SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0 OR GPL-2.0-only WITH OpenJDK-assembly-exception-1.0
 ###############################################################################
 
-if(OMR_OS_AIX)
-	list(APPEND OMR_PLATFORM_C_COMPILE_OPTIONS -qlanglvl=extended)
-	list(APPEND OMR_PLATFORM_CXX_COMPILE_OPTIONS -qlanglvl=extended0x)
 
-	if(CMAKE_C_COMPILER_IS_XLCLANG)
-		list(APPEND OMR_PLATFORM_COMPILE_OPTIONS -qxlcompatmacros)
-	else()
-		list(APPEND OMR_PLATFORM_COMPILE_OPTIONS -qinfo=pro)
-	endif()
-
-	set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} -lm -liconv -ldl -lperfstat")
-
-	if(OMR_ENV_DATA64)
-		set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -q64")
-		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -q64")
-		set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -q64")
-
-		set(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> -X64 cr <TARGET> <LINK_FLAGS> <OBJECTS>")
-		set(CMAKE_C_ARCHIVE_CREATE "<CMAKE_AR> -X64 cr <TARGET> <LINK_FLAGS> <OBJECTS>")
-		set(CMAKE_C_ARCHIVE_FINISH "<CMAKE_RANLIB> -X64 <TARGET>")
-	endif()
-elseif(OMR_OS_LINUX)
-	list(APPEND OMR_PLATFORM_COMPILE_OPTIONS
-		-qxflag=selinux
-	)
-elseif(OMR_OS_ZOS)
+if(OMR_OS_ZOS)
 	set(OMR_ZOS_COMPILE_ARCHITECTURE "arch10" CACHE STRING "z/OS compile machine architecture" FORCE)
 	set(OMR_ZOS_COMPILE_TARGET "ZOSV2R4" CACHE STRING "z/OS compile target operating system" FORCE)
 	set(OMR_ZOS_COMPILE_TUNE "12" CACHE STRING "z/OS compile machine architecture tuning" FORCE)

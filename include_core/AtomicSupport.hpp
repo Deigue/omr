@@ -354,11 +354,9 @@ public:
 		cs((cs_t *)&oldValue, (cs_t *)address, (cs_t)newValue);
 		return oldValue;
 #elif defined(J9ZOS390) /* defined(OMRZTPF) */
-        /* V1.R13 has a compiler bug and if you pass a constant as oldValue it will cause c-stack corruption */
-        volatile uint32_t old = oldValue;
         /* 390 cs() function defined in <stdlib.h>, doesn't expand properly to __cs1() which correctly deals with aliasing */
-        __cs1((uint32_t *)&old, (uint32_t *)address, (uint32_t *)&newValue);
-        return old;
+        __cs1((uint32_t *)&oldValue, (uint32_t *)address, (uint32_t *)&newValue);
+        return oldValue;
 #elif defined(__xlC__) || defined(__open_xl__) /* defined(J9ZOS390) */
 		__compare_and_swap((volatile int*)address, (int*)&oldValue, (int)newValue);
 		return oldValue;

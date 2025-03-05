@@ -19,7 +19,6 @@
 # SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0 OR GPL-2.0-only WITH OpenJDK-assembly-exception-1.0
 ###############################################################################
 
-
 if(OMR_OS_ZOS)
 	set(OMR_ZOS_COMPILE_ARCHITECTURE "arch10" CACHE STRING "z/OS compile machine architecture" FORCE)
 	set(OMR_ZOS_COMPILE_TARGET "ZOSV2R4" CACHE STRING "z/OS compile target operating system" FORCE)
@@ -79,19 +78,12 @@ if(OMR_OS_ZOS)
 		-mnocsect
 	)
 
-	# Configure the platform dependent library for multithreading.
+	# Configure the platform-dependent library for multithreading.
 	set(OMR_PLATFORM_THREAD_LIBRARY "")
 endif()
 
 set(SPP_CMD ${CMAKE_C_COMPILER})
-
-if(CMAKE_C_COMPILER_IS_XLCLANG)
-	# The -P option doesn't sit well with XLClang, so it's not included. It causes:
-	# "ld: 0711-317 ERROR: Undefined symbol: <SYMBOL>" when libj9jit29.so is getting linked.
-	set(SPP_FLAGS -E)
-else()
-	set(SPP_FLAGS -E -P)
-endif()
+set(SPP_FLAGS -E -P)
 
 if(OMR_OS_ZOS)
 	function(_omr_toolchain_process_exports TARGET_NAME)

@@ -43,6 +43,9 @@ if(OMR_OS_ZOS)
 		-march=${OMR_ZOS_COMPILE_ARCHITECTURE}
 	)
 
+	# -std=gnu++14 is used over -std=cpp++14, as the gnu* options are closest to 
+	# -qlanglvl=extended (Enabling most extensions by default). This is preferred
+	# in order to avoid defining _EXT repeatedly in most places.
 	list(APPEND OMR_PLATFORM_CXX_COMPILE_OPTIONS
 		-march=${OMR_ZOS_COMPILE_ARCHITECTURE}
 		"-std=gnu++14"

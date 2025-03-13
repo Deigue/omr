@@ -25,21 +25,8 @@
 #include "ddr/config.hpp"
 
 #if defined(J9ZOS390)
-
 #include <ctype.h>
-#if !defined(__open_xl__)
-#undef toupper
-#undef tolower
-#endif /* !defined(__open_xl__) */
-#include <string>
-
-#if !defined(__open_xl__)
-#define toupper(c) (islower(c) ? (c & _XUPPER_ASCII) : c)
-#define tolower(c) (isupper(c) ? (c | _XLOWER_ASCII) : c)
-#endif /* defined(__open_xl__) */
-
-#else /* defined(J9ZOS390) */
-#include <string>
 #endif /* defined(J9ZOS390) */
 
+#include <string>
 #endif /* STRING_HPP */

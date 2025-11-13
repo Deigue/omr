@@ -149,14 +149,9 @@ ddr_dw_init(
 	Dwarf_Error  *error)
 {
 	Dwarf_Unsigned access = DW_DLC_READ;
-//#pragma convlit(suspend)
-//	char *filename = "/jit/team/gauravc/repos/openj9-openjdk-jdk21-zos/build/zos-s390x-server-release/vm/runtime/bcutil/CMakeFiles/j9dyn.dir/BufferManager.cpp.dwo";
-	// Modifyable filename for API
-	// API requires EBCDIC input to recognize file path.
 	char* filename = a2e_string(strdup(filepath));
 	int rc = dwarf_goff_init_with_GOFF_filename(filename, errhand, errarg, 0, dbg, error);
 	free(filename);
-//#pragma convlit(resume)
 	return rc;
 	return dwarf_init(fd, access, errhand, errarg, dbg, error);
 }
@@ -721,8 +716,6 @@ DwarfScanner::getTypeTag(Dwarf_Die die, Dwarf_Die *typeDie, Dwarf_Half *tag)
 	DDR_RC rc = DDR_RC_ERROR;
 	Dwarf_Error err = NULL;
 	string dieName = "";
-	//getName(die, &dieName);
-	//printf("gc-getTypeTag(ENTRY) for %s\n", dieName.c_str());
 	/* First, check if the die has a type attribute. */
 	Dwarf_Bool hasAttr = false;
 	if (DW_DLV_ERROR == dwarf_hasattr(die, DW_AT_type, &hasAttr, &err)) {
@@ -756,9 +749,6 @@ DwarfScanner::getTypeTag(Dwarf_Die die, Dwarf_Die *typeDie, Dwarf_Half *tag)
 		/* Get the type reference, which is an offset. */
 		Dwarf_Off offset = 0;
 		int ret = dwarf_global_formref(attr, &offset, &err);
-		if (offset == 61243 || offset == 63635) {
-			printf("gc-getTypeTag::offset= %u\n", offset);
-		}
 		dwarf_dealloc(_debug, attr, DW_DLA_ATTR);
 		if (DW_DLV_ERROR == ret) {
 			ERRMSG("Getting formref of type: %s\n", dwarf_errmsg(err));
@@ -781,9 +771,6 @@ DwarfScanner::getTypeTag(Dwarf_Die die, Dwarf_Die *typeDie, Dwarf_Half *tag)
 			*typeDie = newDie;
 		}
 		getName(newDie, &dieName);
-		if (offset == 61243 || offset == 63635) {
-			printf("gc-getTypeTag::dieName(found)= %s\n", dieName.c_str());
-		}
 		/* Get the tag for this type. */
 		if (DW_DLV_ERROR == dwarf_tag(*typeDie, tag, &err)) {
 			ERRMSG("Getting tag from type die: %s\n", dwarf_errmsg(err));
@@ -933,9 +920,6 @@ DwarfScanner::getOrCreateNewType(Dwarf_Die die, Dwarf_Half tag, Type **newType, 
 	string dieName = "";
 	Dwarf_Off dieOffset = 0;
 	DDR_RC rc = getName(die, &dieName, &dieOffset);
-	if (dieName == "CharacterString") {
-		printf("gc-getOrCreateNewType::dieName= %s\n", dieName.c_str());
-	}
 	if (DDR_RC_OK == rc) {
 		unordered_map<Dwarf_Off, Type *>::const_iterator it = _typeOffsetMap.find(dieOffset);
 		if (_typeOffsetMap.end() != it) {
@@ -1682,41 +1666,14 @@ DwarfScanner::getSuperUDT(Dwarf_Die die, ClassUDT *udt)
 			getName(currentDie, &dieName);
 			printf("gc-getSuperUDT::currentDie= %s\n", dieName.c_str());
 		}
-		//rc = DDR_RC_ERROR;
-		//dwarf_dealloc(_debug, superTypeDie, DW_DLA_DIE);
 		tag = 0;
-		//nextTag = 0;
 		nextDie = NULL;
-		//superTypeDie = NULL;
-		//superUDT = NULL;
 		if (DDR_RC_OK == getTypeTag(currentDie, &superTypeDie, &tag)) {
 			/* Get the super udt. */
 			rc = addDieToIR(superTypeDie, tag, NULL, (Type **)&superUDT);
 			currentDie = superTypeDie;
 			iterating = true;
-			printf("gc-getSuperUDT::next->tag= 0x%02x\n", tag);
-			printf("gc-getSuperUDT::is typdef/vol: %s\n", (tag == DW_TAG_typedef) ? "true": "false");
-			/* Check the next level if we are looking at a typedef
-			if (DDR_RC_OK == getTypeTag(superTypeDie, &nextDie, &nextTag)) {
-				if (nextTag == DW_TAG_typedef) {
-					superUDT = NULL;
-					rc = addDieToIR(nextDie, nextTag, NULL, (Type **)&superUDT);
-					string dieName = "";
-					getName(nextDie, &dieName);
-					printf("gc-getSuperUDT::nextDie= %s , superUDT = %s\n", dieName.c_str(), superUDT->getFullName().c_str());
-					tag = nextTag;
-				}
-				printf("gc-getSuperUDT::next->tag= 0x%02x\n", tag);
-				printf("gc-getSuperUDT::next->nextTag= 0x%02x\n", nextTag);
-			}
-			getName(superTypeDie, &dieName);
-			if (dieName == "CharacterString" || dieName == "CharacterStringBase" || dieName == "Strings") {
-				printf("gc-getSuperUDT::superTypeDie= %s\n", dieName.c_str());
-				printf("gc-getSuperUDT::tag= 0x%02x\n", tag);
-			}
-			*/
 		} else if (not iterating) {
-			printf("gc-getSuperUDT(FAIL): Cannot getTypeTag\n");
 			return rc;
 		}
 	/* when pointing to typedef, the tag is volatile. */
@@ -1829,11 +1786,6 @@ DwarfScanner::traverse_cu_in_debug_section(Symbol_IR *ir)
 					break;
 				}
 			}
-			//string dieName = "";
-			//getName(childDie, &dieName);
-			//if (dieName == "CharacterString") {
-			//	return DDR_RC_ERROR; //exit early with failure to debug
-			//}
 		} while (DDR_RC_OK == getNextSibling(&childDie));
 		dwarf_dealloc(_debug, childDie, DW_DLA_DIE);
 
@@ -1860,23 +1812,11 @@ DwarfScanner::startScan(OMRPortLibrary *portLibrary, Symbol_IR *ir, vector<strin
     }
 	DDR_RC rc = loadExcludesFile(portLibrary, excludesFilePath);
 	size_t totalFiles = debugFiles->size();
-//DEBUGPRINTF("total-DEBUGPRINTu: %u\n", (unsigned int)totalFiles);
 	size_t currentIndex = 1;
 	if (DDR_RC_OK == rc) {
 		/* Read list of debug files to scan from the input file. */
 		for (vector<string>::iterator it = debugFiles->begin(); it != debugFiles->end(); ++it, currentIndex++) {
 			Symbol_IR newIR(ir);
-			//printf("Scanning files:\n");
-			//printf("gc-scanFile(%u/%u): %s\n", (unsigned int)currentIndex, (unsigned int)totalFiles, it->c_str());
-			//printf("totals: %s\n", totalFiles);
-			//printf("totalzu: %u\n", (unsigned int)totalFiles);
-			//printf("totalld: %ld\n", totalFiles);
-//#pragma convlit(suspend)
-//			printf("scanFile(%zu/%zu): %s\n", currentIndex, totalFiles, it->c_str());
-//#pragma convlit(resume)
-//			DEBUGPRINTF("total-DEBUGPRINTd: %d\n", totalFiles);
-//			DEBUGPRINTF("total-DEBUGPRINTu: %u\n", (unsigned int)totalFiles);
-			//DEBUGPRINTF("total-DEBUGPRINTld: %ld\n", totalFiles);
 			rc = scanFile(portLibrary, &newIR, it->c_str());
 			if (DDR_RC_OK != rc) {
 				if (rc == DDR_RC_ERROR) {
@@ -1885,7 +1825,6 @@ DwarfScanner::startScan(OMRPortLibrary *portLibrary, Symbol_IR *ir, vector<strin
 					continue;
 				}
 				ERRMSG("gc-Failure scanning(%zu/%zu): %s\n", currentIndex, totalFiles, it->c_str());
-				//break;
 				continue;
 			}
 			ir->mergeIR(&newIR);

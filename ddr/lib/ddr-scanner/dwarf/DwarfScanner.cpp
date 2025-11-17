@@ -41,9 +41,8 @@
 #include <stack>
 #include <utility>
 
-// For a2e_string()
 #if defined(J9ZOS390) && !defined(OMR_EBCDIC)
-#include "atoe.h"
+#include "atoe.h" /* For a2e_string() */
 #endif /* defined(J9ZOS390) && !defined(OMR_EBCDIC) */
 
 #define DW_LIBDWARF_MAKE_VERSION(major, minor) (((major) * 100) + (minor))
@@ -142,16 +141,18 @@ ddr_dw_finish(
 static int
 ddr_dw_init(
 	int           fd,
-	const char* filepath,
+	const char *filepath,
 	Dwarf_Handler errhand,
 	Dwarf_Ptr     errarg,
 	Dwarf_Debug  *dbg,
 	Dwarf_Error  *error)
 {
 	Dwarf_Unsigned access = DW_DLC_READ;
-	char* filename = a2e_string(strdup(filepath));
+	char *filename = a2e_string((filepath));
 	int rc = dwarf_goff_init_with_GOFF_filename(filename, errhand, errarg, 0, dbg, error);
-	free(filename);
+	if (filename != NULL) {
+		free(filename);
+	}
 	return rc;
 	return dwarf_init(fd, access, errhand, errarg, dbg, error);
 }

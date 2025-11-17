@@ -98,6 +98,7 @@ main(int argc, char *argv[])
 		/* translate argv strings to ASCII */
 		for (int i = 0; i < argc; ++i) {
 			argv[i] = e2a_string(argv[i]);
+			printf("gcFile: argv[%d]: %s\n", i, argv[i]);
 			if (NULL == argv[i]) {
 				fprintf(stderr, "failed to convert argument #%d from EBCDIC to ASCII\n", i);
 				rc = DDR_RC_ERROR;

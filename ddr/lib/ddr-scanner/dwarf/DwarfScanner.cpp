@@ -1813,18 +1813,11 @@ DwarfScanner::startScan(OMRPortLibrary *portLibrary, Symbol_IR *ir, vector<strin
 {
 	DEBUGPRINTF("Initializing libDwarf:");
 
-    const char* libpath = getenv("LIBPATH");
-    if (libpath != NULL) {
-        DEBUGPRINTF("LIBPATH: %s\n", libpath);
-    } else {
-        DEBUGPRINTF("LIBPATH is not set.\n");
-    }
 	DDR_RC rc = loadExcludesFile(portLibrary, excludesFilePath);
-	size_t totalFiles = debugFiles->size();
-	size_t currentIndex = 1;
+
 	if (DDR_RC_OK == rc) {
 		/* Read list of debug files to scan from the input file. */
-		for (vector<string>::iterator it = debugFiles->begin(); it != debugFiles->end(); ++it, currentIndex++) {
+		for (vector<string>::iterator it = debugFiles->begin(); it != debugFiles->end(); ++it) {
 			Symbol_IR newIR(ir);
 			rc = scanFile(portLibrary, &newIR, it->c_str());
 			if (DDR_RC_OK != rc) {
@@ -1861,24 +1854,15 @@ DwarfScanner::scanFile(OMRPortLibrary *portLibrary, Symbol_IR *ir, const char *f
 
 #if defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC)
 		if (DW_DLV_NO_ENTRY == res) {
-			rc = DDR_RC_OK;
-			goto file_empty;
+			if (NULL != error) {
+				dwarf_dealloc(_debug, error, DW_DLA_ERROR);
+			}
+			goto done;
 		}
 #endif /* defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC) */
 
 
 		if (DW_DLV_OK != res) {
-			/* write path to problems
-			FILE *fid;
-			fid = fopen("/jit/team/gauravc/repos/openj9-openjdk-jdk21-zos/problems.txt", "a");
-			if (fid == NULL) {
-				printf("gc-Failure: Error opening the problems.txt");
-			} else {
-				fprintf(fid, "%s,%d\n", filepath, res);
-			}
-
-			fclose(fid);
-			*/
 			ERRMSG("Failed to initialize libDwarf scanning %s: %s\nExiting...\n", filepath, dwarf_errmsg(error));
 			if (NULL != error) {
 				dwarf_dealloc(_debug, error, DW_DLA_ERROR);
@@ -1905,7 +1889,9 @@ DwarfScanner::scanFile(OMRPortLibrary *portLibrary, Symbol_IR *ir, const char *f
 		}
 	}
 
-	file_empty:
+#if defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC)
+done:
+#endif /* defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC) */
 	if (fd >= 0) {
 		DEBUGPRINTF("Closing file: fd");
 

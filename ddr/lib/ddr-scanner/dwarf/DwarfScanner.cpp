@@ -141,20 +141,28 @@ ddr_dw_finish(
 static int
 ddr_dw_init(
 	int           fd,
-	const char *filepath,
+	const char   *filepath,
 	Dwarf_Handler errhand,
 	Dwarf_Ptr     errarg,
 	Dwarf_Debug  *dbg,
 	Dwarf_Error  *error)
 {
-	Dwarf_Unsigned access = DW_DLC_READ;
-	char *filename = a2e_string((filepath));
-	int rc = dwarf_goff_init_with_GOFF_filename(filename, errhand, errarg, 0, dbg, error);
-	if (filename != NULL) {
-		free(filename);
+	int result;
+#if defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC)
+	result = DW_DLV_ERROR;
+	char *e_filepath = a2e_string(filepath);
+
+	if (NULL != e_filepath) {
+		result = dwarf_goff_init_with_GOFF_filename(e_filepath, errhand, errarg, 0, dbg, error);
+		free(e_filepath);
 	}
-	return rc;
-	return dwarf_init(fd, access, errhand, errarg, dbg, error);
+#else /* defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC) */
+	Dwarf_Unsigned access = DW_DLC_READ;
+
+	result = dwarf_init(fd, access, errhand, errarg, dbg, error);
+#endif /* defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC) */
+
+	return result;
 }
 
 static int

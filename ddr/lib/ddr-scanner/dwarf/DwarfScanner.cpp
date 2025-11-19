@@ -1659,7 +1659,7 @@ DwarfScanner::getSuperUDT(Dwarf_Die die, ClassUDT *udt)
 	Dwarf_Die currentDie = die;
 	Dwarf_Die nextDie = NULL;
 	Dwarf_Half nextTag = 0;
-	ClassUDT *superUDT = NULL;
+	Type *superUDT = NULL;
 	bool iterating = false;
 	string dieName = "";
 	do {
@@ -1671,7 +1671,7 @@ DwarfScanner::getSuperUDT(Dwarf_Die die, ClassUDT *udt)
 		nextDie = NULL;
 		if (DDR_RC_OK == getTypeTag(currentDie, &superTypeDie, &tag)) {
 			/* Get the super udt. */
-			rc = addDieToIR(superTypeDie, tag, NULL, (Type **)&superUDT);
+			rc = addDieToIR(superTypeDie, tag, NULL, &superUDT);
 			currentDie = superTypeDie;
 			iterating = true;
 		} else if (not iterating) {

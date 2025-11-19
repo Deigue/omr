@@ -1829,12 +1829,8 @@ DwarfScanner::startScan(OMRPortLibrary *portLibrary, Symbol_IR *ir, vector<strin
 			rc = scanFile(portLibrary, &newIR, it->c_str());
 			if (DDR_RC_OK != rc) {
 				if (rc == DDR_RC_ERROR) {
-					// empty dwo, continue
-					 printf("gc-scanFile SKIPPING EMPTY: %s\n", it->c_str());
-					continue;
+					break;
 				}
-				ERRMSG("gc-Failure scanning(%zu/%zu): %s\n", currentIndex, totalFiles, it->c_str());
-				continue;
 			}
 			ir->mergeIR(&newIR);
 		}
@@ -1861,10 +1857,18 @@ DwarfScanner::scanFile(OMRPortLibrary *portLibrary, Symbol_IR *ir, const char *f
 		Dwarf_Ptr errarg = NULL;
 		intptr_t native_fd = omrfile_convert_omrfile_fd_to_native_fd(fd);
 		DwarfScanner::scanFileName = filepath;
-		//printf("bef ddr_dw_init of %s\n", filepath);
 		res = ddr_dw_init((int)native_fd, filepath, errhand, errarg, &_debug, &error);
+
+#if defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC)
+		if (DW_DLV_NO_ENTRY == res) {
+			rc = DDR_RC_OK;
+			goto file_empty;
+		}
+#endif /* defined(J9ZOS390) && defined(__open_xl__) && !defined(OMR_EBCDIC) */
+
+
 		if (DW_DLV_OK != res) {
-			// write path to problems
+			/* write path to problems
 			FILE *fid;
 			fid = fopen("/jit/team/gauravc/repos/openj9-openjdk-jdk21-zos/problems.txt", "a");
 			if (fid == NULL) {
@@ -1874,9 +1878,9 @@ DwarfScanner::scanFile(OMRPortLibrary *portLibrary, Symbol_IR *ir, const char *f
 			}
 
 			fclose(fid);
+			*/
 			ERRMSG("Failed to initialize libDwarf scanning %s: %s\nExiting...\n", filepath, dwarf_errmsg(error));
 			if (NULL != error) {
-				printf("gc-Failure: Had to dealloc");
 				dwarf_dealloc(_debug, error, DW_DLA_ERROR);
 			}
 			rc = DDR_RC_ERROR;
@@ -1901,6 +1905,7 @@ DwarfScanner::scanFile(OMRPortLibrary *portLibrary, Symbol_IR *ir, const char *f
 		}
 	}
 
+	file_empty:
 	if (fd >= 0) {
 		DEBUGPRINTF("Closing file: fd");
 

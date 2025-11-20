@@ -1664,35 +1664,17 @@ DwarfScanner::getSuperUDT(Dwarf_Die die, ClassUDT *udt)
 	Dwarf_Half tag = 0;
 	Dwarf_Die superTypeDie = NULL;
 
-	Dwarf_Die currentDie = die;
-	Dwarf_Die nextDie = NULL;
-	Dwarf_Half nextTag = 0;
-	Type *superUDT = NULL;
-	bool iterating = false;
-	string dieName = "";
-	do {
-		if (iterating) {
-			getName(currentDie, &dieName);
-			printf("gc-getSuperUDT::currentDie= %s\n", dieName.c_str());
+	if (DDR_RC_OK == getTypeTag(die, &superTypeDie, &tag)) {
+		Type *superUDT = NULL;
+		/* Get the super udt. */
+		if ((DDR_RC_OK == addDieToIR(superTypeDie, tag, NULL, &superUDT))
+			&& (NULL != superUDT)
+		) {
+			rc = DDR_RC_OK;
+			udt->_superClass = superUDT;
 		}
-		tag = 0;
-		nextDie = NULL;
-		if (DDR_RC_OK == getTypeTag(currentDie, &superTypeDie, &tag)) {
-			/* Get the super udt. */
-			rc = addDieToIR(superTypeDie, tag, NULL, &superUDT);
-			currentDie = superTypeDie;
-			iterating = true;
-		} else if (not iterating) {
-			return rc;
-		}
-	/* when pointing to typedef, the tag is volatile. */
-	} while (tag == DW_TAG_typedef);
-
-	if ((DDR_RC_OK == rc) && (NULL != superUDT)) {
-		printf("gc-getSuperUDT::superUDT= %s\n", superUDT->getFullName().c_str());
-		udt->_superClass = superUDT;
+		dwarf_dealloc(_debug, superTypeDie, DW_DLA_DIE);
 	}
-	dwarf_dealloc(_debug, superTypeDie, DW_DLA_DIE);
 	return rc;
 }
 

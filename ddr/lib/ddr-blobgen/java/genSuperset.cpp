@@ -27,17 +27,9 @@
 #include "ddr/ir/Symbol_IR.hpp"
 #include "ddr/ir/TypedefUDT.hpp"
 #include "ddr/ir/UnionUDT.hpp"
-#include "ddr/std/sstream.hpp"
 
 #include <assert.h>
 #include <stdio.h>
-
-// For a2e_string()
-#if defined(J9ZOS390) && !defined(OMR_EBCDIC)
-#include "atoe.h"
-#endif /* defined(J9ZOS390) && !defined(OMR_EBCDIC) */
-
-using std::stringstream;
 
 static string
 replaceAll(string str, const string &subStr, const string &newStr)
@@ -99,14 +91,11 @@ JavaSupersetGenerator::replaceBaseTypedef(Type *type, string *name)
 	 * types such as "U_32" are replaced with "U32".
 	 */
 	if (Type::isStandardType(name->c_str() + start, (size_t)length, &isSigned, &bitWidth)) {
-		stringstream ss;
+		OMRPORT_ACCESS_FROM_OMRPORT(_portLibrary);
+		char newType[32];
 
-		ss << (isSigned ? "I" : "U") << bitWidth;
-		string newName = std::string(isSigned ? "I" : "U") + e2a_string(std::to_string(bitWidth).c_str());
-		//printf("gc-printName(old): %s\n", name->c_str());
-		name->replace(start, length, newName.c_str());
-		//printf("gc-printName: %s\n", name->c_str());
-		//printf("gc-newName: %s\n", newName.c_str());
+		omrstr_printf(newType, sizeof(newType), "%c%zu", isSigned ? 'I' : 'U', bitWidth);
+		name->replace(start, length, newType);
 	}
 }
 
@@ -267,10 +256,11 @@ JavaSupersetGenerator::getFieldType(Field *field, string *assembledTypeName, str
 	string bitField;
 
 	if ((DDR_RC_OK == rc) && (0 != field->_bitField)) {
-		//stringstream ss;
-		//ss << ":" << field->_bitField;
-		//bitField = ss.str();
-		bitField = std::string(":") + e2a_string(std::to_string(field->_bitField).c_str()); 
+		OMRPORT_ACCESS_FROM_OMRPORT(_portLibrary);
+		char width[32];
+
+		omrstr_printf(width, sizeof(width), ":%zu", field->_bitField);
+		bitField = width;
 	}
 
 	/* Assemble the type name. */

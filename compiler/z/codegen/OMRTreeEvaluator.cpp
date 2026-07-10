@@ -12612,6 +12612,7 @@ TR::Register *OMR::Z::TreeEvaluator::arraysetEvaluator(TR::Node *node, TR::CodeG
     bool mvcCopy = false;
     bool mvcluCopy = false;
     bool stgCopy = false;
+    bool vstCopy = false;
     bool varLength = false;
     uint32_t bv;
     int32_t shiftAmount;
@@ -12641,9 +12642,13 @@ TR::Register *OMR::Z::TreeEvaluator::arraysetEvaluator(TR::Node *node, TR::CodeG
     if (constExpr->getOpCode().isLoadConst()) {
         switch (constType) {
             case TR::Int8:
-                mvcCopy = true;
                 bv = constExpr->getByte();
                 shiftAmount = 0;
+                if (cg->getSupportsVectorRegisters()) {
+                    vstCopy = true;
+                } else {
+                    mvcCopy = true;
+                }
                 break;
             case TR::Int16: {
                 shiftAmount = 1;
@@ -12717,7 +12722,10 @@ TR::Register *OMR::Z::TreeEvaluator::arraysetEvaluator(TR::Node *node, TR::CodeG
         && constExpr->getReferenceCount() == 1)
         useMVI = true;
 
-    if (constExpr->getOpCode().isLoadConst() && !useMVI) {
+    if (vstCopy) {
+        if (constExpr->getRegister() != NULL)
+            cg->evaluate(constExpr);
+    } else if (constExpr->getOpCode().isLoadConst() && !useMVI) {
         if (mvcCopy && (bv == 0)) {
             constExprRegister = cg->allocateRegister();
             isZero = true;
@@ -12757,7 +12765,7 @@ TR::Register *OMR::Z::TreeEvaluator::arraysetEvaluator(TR::Node *node, TR::CodeG
                 constExprRegister = generateLoad32BitConstant(cg, constExpr);
             }
         }
-    } else if (!useMVI) {
+    } else if (!vstCopy && !useMVI) {
         constExprRegister = cg->gprClobberEvaluate(constExpr);
 
         if (constExpr->getDataType() == TR::Int8) {
@@ -12828,6 +12836,68 @@ TR::Register *OMR::Z::TreeEvaluator::arraysetEvaluator(TR::Node *node, TR::CodeG
                 }
             }
         }
+    } else if (vstCopy) {
+        // Vector fill for Int8
+        baseReg = cg->gprClobberEvaluate(baseAddr);
+        TR::Register *vecFillReg = cg->allocateRegister(TR_VRF);
+
+        // VREPI vecFillReg, bv, 0  (mask 0 = byte: replicate to all 16 lanes)
+        generateVRIaInstruction(cg, TR::InstOpCode::VREPI, node, vecFillReg, static_cast<uint16_t>(bv), 0);
+
+        uint64_t iters = elems >> 4; // if elements is 64, then downshift 64/16 = 4 iteration of 16 byte stores
+        uint64_t remainder = elems & 0xF; // just get last 4bit if remain
+
+        if (iters > 0) {
+            TR::Register *itersReg = cg->allocateRegister();
+            TR::Register *indexReg = cg->allocateRegister();
+
+            //clear index reg, load the iters to iterReg
+            generateRRInstruction(cg, TR::InstOpCode::getXORRegOpCode(), node, indexReg, indexReg);
+            generateLoad32BitConstant(cg, node, static_cast<int32_t>(iters), itersReg, true);
+
+            TR::LabelSymbol *topOfLoop    = generateLabelSymbol(cg);
+            TR::LabelSymbol *cFlowRegionEnd = generateLabelSymbol(cg);
+
+            //loop start
+            generateS390LabelInstruction(cg, TR::InstOpCode::label, node, topOfLoop);
+            topOfLoop->setStartInternalControlFlow();
+
+            generateVRXInstruction(cg, TR::InstOpCode::VST, node, vecFillReg,
+                generateS390MemoryReference(baseReg, indexReg, 0, cg), 0);
+            // AHI indexreg, 16 , moving index ahead 16 bytes for next vect store
+            generateRIInstruction(cg, TR::InstOpCode::getAddHalfWordImmOpCode(), node, indexReg, 16);
+
+            TR::RegisterDependencyConditions *deps
+                = new (cg->trHeapMemory()) TR::RegisterDependencyConditions(0, 3, cg);
+            deps->addPostCondition(indexReg, TR::RealRegister::AssignAny);
+            deps->addPostCondition(baseReg, TR::RealRegister::AssignAny);
+            deps->addPostCondition(itersReg, TR::RealRegister::AssignAny);
+
+            generateS390BranchInstruction(cg, TR::InstOpCode::BRCT, node, itersReg, topOfLoop);
+            generateS390LabelInstruction(cg, TR::InstOpCode::label, node, cFlowRegionEnd, deps);
+            cFlowRegionEnd->setEndInternalControlFlow();
+            //end loop, go back until iters 0
+
+            if (remainder > 0) {
+                TR::Register *tailLenReg = cg->allocateRegister();
+                generateLoad32BitConstant(cg, node, static_cast<int32_t>(remainder - 1), tailLenReg, true);
+                generateVRSbInstruction(cg, TR::InstOpCode::VSTL, node, vecFillReg, tailLenReg,
+                    generateS390MemoryReference(baseReg, indexReg, 0, cg), 0);
+                cg->stopUsingRegister(tailLenReg);
+            }
+
+            cg->stopUsingRegister(itersReg);
+            cg->stopUsingRegister(indexReg);
+        } else {
+            // this imply that elems was less than 16, no need full 64bit vector.
+            TR::Register *tailLenReg = cg->allocateRegister();
+            generateLoad32BitConstant(cg, node, static_cast<int32_t>(remainder - 1), tailLenReg, true);
+            generateVRSbInstruction(cg, TR::InstOpCode::VSTL, node, vecFillReg, tailLenReg,
+                generateS390MemoryReference(baseReg, 0, cg), 0);
+            cg->stopUsingRegister(tailLenReg);
+        }
+
+        cg->stopUsingRegister(vecFillReg);
     }
 
     else if (mvcluCopy) {
@@ -13057,7 +13127,7 @@ TR::Register *OMR::Z::TreeEvaluator::arraysetEvaluator(TR::Node *node, TR::CodeG
 
     if (elemsRegister)
         cg->stopUsingRegister(elemsRegister);
-    if (!useMVI)
+    if (!useMVI && !vstCopy)
         cg->stopUsingRegister(constExprRegister);
     if (evaluateChildren) {
         cg->stopUsingRegister(baseReg);

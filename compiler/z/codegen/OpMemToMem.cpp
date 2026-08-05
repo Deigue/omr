@@ -518,6 +518,16 @@ TR::Instruction *MemInitConstLenMacroOp::generateLoop()
 
     _startControlFlow = cursor = generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfLoop, cursor);
 
+    // Seed the first byte of the next 256-byte before the MVC so ->
+    // iteration MVC source byte is ready independently of the current MVC
+    // previous MVC(n+1) wait of MVC(n) potentially, now just need STC complete
+    if (_useByteVal)
+        cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
+            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset + 256, _cg), _byteVal, cursor);
+    else
+        cursor = generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, _initReg,
+            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset + 256, _cg), cursor);
+
     cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, 255,
         new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset + 1, _cg),
         new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, _offset, _cg), cursor);

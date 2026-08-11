@@ -1295,6 +1295,16 @@ TR::Instruction *MemInitVarLenMacroOp::generateInstruction(int32_t offset, int64
 
         _firstByteInitialized = true;
         length--;
+    } else if (length > 1) {
+        // confirmed we are in the loop body of len 256, other call only 0,1
+        // Seed the first byte of the next 256-byte block before the MVC
+        // so byte is ready independently of the current MVC
+        if (_useByteVal)
+            cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, offset + (int32_t)length, _cg), _byteVal);
+        else
+            cursor = generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, _initReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, offset + (int32_t)length, _cg));
     }
 
     if (length > 0) {

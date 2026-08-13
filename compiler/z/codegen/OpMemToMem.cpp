@@ -1308,7 +1308,7 @@ TR::Instruction *MemInitVarLenMacroOp::generateInstruction(int32_t offset, int64
     }
 
     if (length > 0) {
-        cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, length - 1,
+        cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, length - 2,
             new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 1 + offset, _cg),
             new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, offset, _cg), cursor);
     }

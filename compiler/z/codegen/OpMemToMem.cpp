@@ -775,10 +775,10 @@ TR::RegisterDependencyConditions *MemCmpConstLenMacroOp::generateDependencies()
 
 TR::RegisterDependencyConditions *MemInitVarLenMacroOp::generateDependencies()
 {
-    if (!(_raReg || _dstReg || _srcReg || _initReg || _itersReg || _regLen || _litReg || _litPoolReg))
+    if (!(_raReg || _dstReg || _srcReg || _initReg || _itersReg || _regLen || _litReg || _litPoolReg || _unrollReg))
         return NULL;
 
-    TR::RegisterDependencyConditions *dependencies = generateRegisterDependencyConditions(0, 7, _cg);
+    TR::RegisterDependencyConditions *dependencies = generateRegisterDependencyConditions(0, 8, _cg);
 
     if (_raReg)
         dependencies->addPostCondition(_raReg, _cg->getReturnAddressRegister());
@@ -789,6 +789,8 @@ TR::RegisterDependencyConditions *MemInitVarLenMacroOp::generateDependencies()
             dependencies->addPostCondition(_initReg, TR::RealRegister::AssignAny);
         if (_itersReg)
             dependencies->addPostCondition(_itersReg, TR::RealRegister::AssignAny);
+        if (_unrollReg)
+            dependencies->addPostCondition(_unrollReg, TR::RealRegister::AssignAny);
     } else {
         if (_dstReg)
             dependencies->addPostCondition(_dstReg, TR::RealRegister::GPR1);
@@ -1328,17 +1330,17 @@ TR::Instruction *MemInitVarLenMacroOp::generateLoop()
     // static offsets 0, 256, 512, ..., 1792 from the current base —
     // no LA per slot, one LA per 8-block group.
     // ---------------------------------------------------------------
-    TR::Register *unrollReg = _cg->allocateRegister();
+    _unrollReg = _cg->allocateRegister();
 
-    // unrollReg = itersReg >> 3  (number of 8-block, 2048-byte groups)
+    // _unrollReg = itersReg >> 3  (number of 8-block, 2048-byte groups)
     if (needs64BitOpCode) {
-        generateRSInstruction(_cg, TR::InstOpCode::SRAG, _rootNode, unrollReg, _itersReg, 3);
+        generateRSInstruction(_cg, TR::InstOpCode::SRAG, _rootNode, _unrollReg, _itersReg, 3);
     } else {
         if (_cg->comp()->target().cpu.isAtLeast(OMR_PROCESSOR_S390_Z196)) {
-            generateRSInstruction(_cg, TR::InstOpCode::SRAK, _rootNode, unrollReg, _itersReg, 3);
+            generateRSInstruction(_cg, TR::InstOpCode::SRAK, _rootNode, _unrollReg, _itersReg, 3);
         } else {
-            generateRRInstruction(_cg, TR::InstOpCode::LR, _rootNode, unrollReg, _itersReg);
-            generateRSInstruction(_cg, TR::InstOpCode::SRA, _rootNode, unrollReg, 3);
+            generateRRInstruction(_cg, TR::InstOpCode::LR, _rootNode, _unrollReg, _itersReg);
+            generateRSInstruction(_cg, TR::InstOpCode::SRA, _rootNode, _unrollReg, 3);
         }
     }
 
@@ -1348,20 +1350,20 @@ TR::Instruction *MemInitVarLenMacroOp::generateLoop()
     TR::LabelSymbol *topOfUnrollLoop = generateLabelSymbol(_cg);
     generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfUnrollLoop);
 
-    // UNROLL_FACTOR STC+MVC pairs with static offset we send down, no LA inbetween.
+    // UNROLL_FACTOR STC+MVC pairs with static offsets — no LA between slots
     for (int32_t i = 0; i < UNROLL_FACTOR; ++i)
         generateInstruction(i * 256, 256);
 
-    // Advance dstNode by UNROLL_FACTOR*256 bytes
+    // Advance dst by UNROLL_FACTOR*256 bytes; one LA per 8-block group
     generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
         new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, UNROLL_FACTOR * 256, _cg));
 
     generateS390BranchInstruction(
         _cg, needs64BitOpCode ? TR::InstOpCode::BRCTG : TR::InstOpCode::BRCT,
-        _rootNode, unrollReg, topOfUnrollLoop);
+        _rootNode, _unrollReg, topOfUnrollLoop);
 
     generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, bottomOfUnrollLoop);
-    _cg->stopUsingRegister(unrollReg);
+    _cg->stopUsingRegister(_unrollReg);
 
     // ---------------------------------------------------------------
     // Remainder loop — handles itersReg & (UNROLL_FACTOR-1) leftover

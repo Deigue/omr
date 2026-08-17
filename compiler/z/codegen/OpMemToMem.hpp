@@ -458,6 +458,7 @@ public:
         , _useByteVal(false)
         , _firstByteInitialized(false)
         , _litPoolReg(NULL)
+        , _unrollReg(NULL)
     {}
 
     MemInitVarLenMacroOp(TR::Node *rootNode, TR::Node *dstNode, TR::CodeGenerator *cg, TR::Register *regLen,
@@ -468,6 +469,7 @@ public:
         , _byteVal(byteVal)
         , _firstByteInitialized(false)
         , _litPoolReg(NULL)
+        , _unrollReg(NULL)
     {}
 
 protected:
@@ -485,6 +487,7 @@ protected:
 private:
     TR::Register *_initReg;
     TR::Register *_litPoolReg;
+    TR::Register *_unrollReg;
     bool _useByteVal;
     bool _firstByteInitialized;
     int8_t _byteVal;

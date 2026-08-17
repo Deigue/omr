@@ -1277,6 +1277,132 @@ TR::Instruction *MemCmpConstLenMacroOp::generateInstruction(int32_t offset, int6
     return cursor;
 }
 
+TR::Instruction *MemInitVarLenMacroOp::generateLoop()
+{
+    // Mimic the MemToMemVarLenMacroOp pattern, but with loop unrolling and handle
+    // remainder (itersReg&7)
+
+    TR::Compilation *comp = _cg->comp();
+    bool needs64BitOpCode = comp->target().is64Bit();
+
+    // EX-for-remainder setup
+    if (useEXForRemainder()) {
+        generateSrcMemRef(0);
+        generateDstMemRef(0);
+
+        if (!_lengthMinusOne)
+            generateRIInstruction(_cg, needs64BitOpCode ? TR::InstOpCode::AGHI : TR::InstOpCode::AHI,
+                _rootNode, _regLen, -1);
+
+        if (_lengthMinusOne)
+            generateRRInstruction(_cg, TR::InstOpCode::LTR, _rootNode, _regLen, _regLen);
+
+        _doneLabel = generateLabelSymbol(_cg);
+        _startControlFlow = generateS390BranchInstruction(
+            _cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BL, _rootNode, _doneLabel);
+    }
+
+    // Seed byte 0
+    generateInstruction(0, 1);
+
+    if (_itersReg == NULL)
+        _itersReg = _cg->allocateRegister();
+
+    // itersReg = number of 256-byte blocks = regLen >> 8
+    if (needs64BitOpCode) {
+        generateRSInstruction(_cg, TR::InstOpCode::SRAG, _rootNode, _itersReg, _regLen, 8);
+    } else {
+        if (_cg->comp()->target().cpu.isAtLeast(OMR_PROCESSOR_S390_Z196)) {
+            generateRSInstruction(_cg, TR::InstOpCode::SRAK, _rootNode, _itersReg, _regLen, 8);
+        } else {
+            generateRRInstruction(_cg, TR::InstOpCode::LR, _rootNode, _itersReg, _regLen);
+            generateRSInstruction(_cg, TR::InstOpCode::SRA, _rootNode, _itersReg, 8);
+        }
+    }
+
+    TR::LabelSymbol *bottomOfLoop = generateLabelSymbol(_cg);
+
+    // ---------------------------------------------------------------
+    // 8x unrolled loop
+    // Each iteration covers UNROLL_FACTOR*256 = 2048 bytes using
+    // static offsets 0, 256, 512, ..., 1792 from the current base —
+    // no LA per slot, one LA per 8-block group.
+    // ---------------------------------------------------------------
+    TR::Register *unrollReg = _cg->allocateRegister();
+
+    // unrollReg = itersReg >> 3  (number of 8-block, 2048-byte groups)
+    if (needs64BitOpCode) {
+        generateRSInstruction(_cg, TR::InstOpCode::SRAG, _rootNode, unrollReg, _itersReg, 3);
+    } else {
+        if (_cg->comp()->target().cpu.isAtLeast(OMR_PROCESSOR_S390_Z196)) {
+            generateRSInstruction(_cg, TR::InstOpCode::SRAK, _rootNode, unrollReg, _itersReg, 3);
+        } else {
+            generateRRInstruction(_cg, TR::InstOpCode::LR, _rootNode, unrollReg, _itersReg);
+            generateRSInstruction(_cg, TR::InstOpCode::SRA, _rootNode, unrollReg, 3);
+        }
+    }
+
+    TR::LabelSymbol *bottomOfUnrollLoop = generateLabelSymbol(_cg);
+    generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BE, _rootNode, bottomOfUnrollLoop);
+
+    TR::LabelSymbol *topOfUnrollLoop = generateLabelSymbol(_cg);
+    generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfUnrollLoop);
+
+    // UNROLL_FACTOR STC+MVC pairs with static offset we send down, no LA inbetween.
+    for (int32_t i = 0; i < UNROLL_FACTOR; ++i)
+        generateInstruction(i * 256, 256);
+
+    // Advance dstNode by UNROLL_FACTOR*256 bytes
+    generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+        new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, UNROLL_FACTOR * 256, _cg));
+
+    generateS390BranchInstruction(
+        _cg, needs64BitOpCode ? TR::InstOpCode::BRCTG : TR::InstOpCode::BRCT,
+        _rootNode, unrollReg, topOfUnrollLoop);
+
+    generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, bottomOfUnrollLoop);
+    _cg->stopUsingRegister(unrollReg);
+
+    // ---------------------------------------------------------------
+    // Remainder loop — handles itersReg & (UNROLL_FACTOR-1) leftover
+    // 256-byte blocks one at a time.
+    // ---------------------------------------------------------------
+    generateRILInstruction(_cg, TR::InstOpCode::NILF, _rootNode, _itersReg, UNROLL_FACTOR - 1);
+    generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BE, _rootNode, bottomOfLoop);
+
+    TR::LabelSymbol *topOfRemLoop = generateLabelSymbol(_cg);
+    generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfRemLoop);
+
+    generateInstruction(0, 256);
+    generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+        new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 256, _cg));
+
+    generateS390BranchInstruction(_cg, TR::InstOpCode::BRCT, _rootNode, _itersReg, topOfRemLoop);
+
+    if (!comp->getOption(TR_DisableInlineEXTarget)) {
+        if (useEXForRemainder()) {
+            generateSrcMemRef(0);
+            generateDstMemRef(0);
+
+            generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_MASK15,
+                _rootNode, bottomOfLoop);
+
+            generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode,
+                _EXTargetLabel = generateLabelSymbol(_cg));
+
+            // 1-byte MVC — target for EXRL in generateRemainder
+            generateInstruction(0, 1);
+        }
+    }
+
+    TR::Instruction *cursor = generateS390LabelInstruction(
+        _cg, TR::InstOpCode::label, _rootNode, bottomOfLoop);
+
+    _cg->stopUsingRegister(_itersReg);
+
+    return cursor;
+}
+
 TR::Instruction *MemInitVarLenMacroOp::generateInstruction(int32_t offset, int64_t length)
 {
     TR::Compilation *comp = _cg->comp();
@@ -1285,7 +1411,13 @@ TR::Instruction *MemInitVarLenMacroOp::generateInstruction(int32_t offset, int64
         return cursor;
     }
 
+    // lookaheadSeed tracks whether we pre-wrote the first byte of the NEXT block.
+    // When true the MVC covers one fewer byte (length-2 instead of length-1) because
+    // the last byte of the 256-byte span is already owned by the next iteration's seed.
+    bool lookaheadSeed = false;
+
     if (!_firstByteInitialized) {
+        // First ever call: write byte 0, then MVC will cover bytes 1..(length-1).
         if (_useByteVal)
             cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
                 new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, offset, _cg), _byteVal);
@@ -1296,19 +1428,24 @@ TR::Instruction *MemInitVarLenMacroOp::generateInstruction(int32_t offset, int64
         _firstByteInitialized = true;
         length--;
     } else if (length > 1) {
-        // confirmed we are in the loop body of len 256, other call only 0,1
-        // Seed the first byte of the next 256-byte block before the MVC
-        // so byte is ready independently of the current MVC
+        // Loop body (length==256): seed byte 0 of the NEXT block before the MVC
+        // so the following iteration's MVC source is ready independently.
         if (_useByteVal)
             cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
                 new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, offset + (int32_t)length, _cg), _byteVal);
         else
             cursor = generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, _initReg,
                 new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, offset + (int32_t)length, _cg));
+        lookaheadSeed = true;
     }
+    // EX-target path: length==1, _firstByteInitialized==true → neither branch above fires,
+    // lookaheadSeed stays false, MVC uses length-1 == 0 (1-byte MVC for EXRL). Correct.
 
     if (length > 0) {
-        cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, length - 2,
+        // When lookaheadSeed is true the last byte of this block was already written
+        // by the STC above, so the MVC only needs to cover bytes 1..(length-2).
+        int64_t mvcLen = lookaheadSeed ? length - 2 : length - 1;
+        cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, mvcLen,
             new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 1 + offset, _cg),
             new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, offset, _cg), cursor);
     }

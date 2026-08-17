@@ -472,12 +472,15 @@ public:
 
 protected:
     virtual TR::Instruction *generateInstruction(int32_t offset, int64_t length);
+    virtual TR::Instruction *generateLoop();
     virtual intptr_t getHelper();
     virtual TR::SymbolReference *getHelperSymRef();
     virtual TR::RegisterDependencyConditions *generateDependencies();
     virtual TR::Instruction *generateRemainder();
 
     virtual Kind getKind() { return IsMemInit; }
+
+    static const int32_t UNROLL_FACTOR = 8; ///< number of 256-byte blocks per unrolled loop iteration
 
 private:
     TR::Register *_initReg;

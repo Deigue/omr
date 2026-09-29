@@ -81,6 +81,8 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
 {
     TR::Compilation *comp = _cg->comp();
     bool needs64BitOpCode = comp->target().is64Bit();
+    static bool disableMemInitMVCSeedOpt = (feGetEnv("TR_DisableMemInitMVCSeedOpt") != NULL);
+    static bool disableMemInitStableSourceOpt = (feGetEnv("TR_DisableMemInitStableSourceOpt") != NULL);
 
     if (useEXForRemainder()) {
         // need to do this before the branch or some
@@ -103,7 +105,6 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
     }
     // Don't seed on MemInitMVCSeedOpt path. MVC seed already happens within looping.
     if (getKind() == MemToMemMacroOp::IsMemInit) {
-        static bool disableMemInitMVCSeedOpt = (feGetEnv("TR_DisableMemInitMVCSeedOpt") != NULL);
         if (disableMemInitMVCSeedOpt)
             generateInstruction(0, 1);
     }
@@ -159,6 +160,73 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
     }
 
     generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BE, _rootNode, bottomOfLoop);
+
+    // Stable-source optimization for varlen path.
+    // Fill block 0 with STC+MVC(254), set _baseReg to start of block, then fill subsequent
+    // blocks using non-destructive MVC(255) via _baseReg[0].  The loop counter is -1 to account
+    // for block 0 already being filled. After looping, _srcReg is set to _baseReg to
+    // keep ready for generateRemainder() if needed.
+    if (getKind() == MemToMemMacroOp::IsMemInit) {
+        if (!disableMemInitMVCSeedOpt && !disableMemInitStableSourceOpt) {
+            // Cast MemInitVarLenMacroOp obj to access _initReg, _useByteVal, _byteVal, _baseReg.
+            MemInitVarLenMacroOp *memInitOp = static_cast<MemInitVarLenMacroOp *>(this);
+
+            if (memInitOp->_useByteVal)
+                generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
+                    new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg), memInitOp->_byteVal);
+            else
+                generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, memInitOp->_initReg,
+                    new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg));
+            generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, 254,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 1, _cg),
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg));
+
+            // Capture the base address of the filled block 0.
+            memInitOp->_baseReg = _cg->allocateRegister();
+            generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, memInitOp->_baseReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg));
+
+            // Advance dstReg to block 1 and decrement loop counter.
+            generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 256, _cg));
+            generateRIInstruction(_cg, needs64BitOpCode ? TR::InstOpCode::AGHI : TR::InstOpCode::AHI, _rootNode,
+                _itersReg, -1);
+            // If updated itersReg is 0, then iterations done -> goto end.
+            generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BE, _rootNode, bottomOfLoop);
+
+            generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfLoop);
+
+            generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, 255,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg),
+                new (_cg->trHeapMemory()) TR::MemoryReference(memInitOp->_baseReg, 0, _cg));
+            generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 256, _cg));
+
+            generateS390BranchInstruction(_cg, TR::InstOpCode::BRCT, _rootNode, _itersReg, topOfLoop);
+
+            // Point _srcReg at stable block 0 for EXRL target instruction + generateRemainder() as well.
+            _srcReg = memInitOp->_baseReg;
+            memInitOp->_firstByteInitialized = true;
+
+            if (!comp->getOption(TR_DisableInlineEXTarget) && useEXForRemainder()) {
+                generateSrcMemRef(0);
+                generateDstMemRef(0);
+
+                generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_MASK15, _rootNode,
+                    bottomOfLoop);
+
+                generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode,
+                    _EXTargetLabel = generateLabelSymbol(_cg));
+
+                // EXRL target instruction: source is _baseReg[0] (stable block 0).
+                generateInstruction(0, 1);
+            }
+
+            TR::Instruction *cursor = generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, bottomOfLoop);
+            _cg->stopUsingRegister(_itersReg);
+            return cursor;
+        }
+    }
 
     generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfLoop);
 
@@ -921,6 +989,8 @@ TR::RegisterDependencyConditions *MemInitVarLenMacroOp::generateDependencies()
         if (_itersReg)
             dependencies->addPostCondition(_itersReg, TR::RealRegister::GPR0);
     }
+    if (_baseReg)
+        dependencies->addPostCondition(_baseReg, TR::RealRegister::AssignAny);
     if (_regLen)
         dependencies->addPostCondition(_regLen, TR::RealRegister::AssignAny);
     if (_litReg)
@@ -982,8 +1052,6 @@ TR::RegisterDependencyConditions *MemCpyVarLenMacroOp::generateDependencies()
         if (_itersReg)
             dependencies->addPostCondition(_itersReg, TR::RealRegister::GPR0);
     }
-    if (_baseReg)
-        dependencies->addPostCondition(_baseReg, TR::RealRegister::AssignAny);
     if (_regLen)
         dependencies->addPostCondition(_regLen, TR::RealRegister::AssignAny);
     if (_litReg)
@@ -1154,7 +1222,7 @@ TR::Instruction *MemInitVarLenMacroOp::generateRemainder()
         if (_firstByteInitialized) {
             static bool disableMemInitMVCSeedOpt = (feGetEnv("TR_DisableMemInitMVCSeedOpt") != NULL);
             if (!disableMemInitMVCSeedOpt) {
-                // SeedOpt path fills 256-byte blocks only. Seed the start of the remainder block.
+                // SeedOpt/StableSource path: seed byte 0 of the remainder block.
                 if (_useByteVal)
                     generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
                         new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg), _byteVal);
@@ -1275,8 +1343,8 @@ TR::Instruction *MemInitConstLenMacroOp::generateInstruction(int32_t offset, int
         return cursor;
     }
 
-    // Set _srcMR from _srcReg when set explicitly (stable-source opt)
-    if (_srcReg != NULL) {
+    // When the stable-source opt has redirected _srcReg to _baseReg (i.e. _srcReg != _dstReg).
+    if (_srcReg != NULL && _srcReg != _dstReg) {
         _srcMR = new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, offset, _cg);
     } else if (_dstNode == _srcNode) {
         _srcMR = generateS390MemoryReference(*_dstMR, offset, _cg);

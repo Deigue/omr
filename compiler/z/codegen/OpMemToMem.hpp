@@ -484,7 +484,10 @@ protected:
 
     virtual Kind getKind() { return IsMemInit; }
 
-    // Fields accessed by MemToMemVarLenMacroOp::generateLoop() for stable-source optimization path.
+private:
+    // Allow MemToMemVarLenMacroOp::generateLoop() accesses for the stable-source opt.
+    friend class MemToMemVarLenMacroOp;
+
     TR::Register *_initReg;
     TR::Register *_litPoolReg;
     TR::Register *_baseReg; // Base addr used as stable MVC source when StableSourceOpt is active.
@@ -492,7 +495,6 @@ protected:
     bool _firstByteInitialized;
     int8_t _byteVal;
 
-private:
     bool checkLengthAfterLoop() { return true; }
 };
 

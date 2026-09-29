@@ -476,7 +476,103 @@ TR::Instruction *MemInitConstLenMacroOp::generateLoop()
         return cursor;
     }
 
+    // TR_DisableMemInitMVCSeedOpt: disables the per-block STC+MVC(254) seed pattern (revert to
+    // single pre-loop STC + pure MVC(255) loop).
     static bool disableMemInitMVCSeedOpt = (feGetEnv("TR_DisableMemInitMVCSeedOpt") != NULL);
+
+    // Stable-source optimization: fill block 0 once with STC+MVC(254), capture address as
+    // _baseReg, then fill subsequent blocks with a non-destructive MVC(255) from _baseReg[0]
+    static bool disableMemInitStableSourceOpt = (feGetEnv("TR_DisableMemInitStableSourceOpt") != NULL);
+
+    if (!disableMemInitMVCSeedOpt && !disableMemInitStableSourceOpt && largeCopies >= 2) {
+        // fill block 0 with the standard destructive STC+MVC(254)
+        if (_useByteVal)
+            cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset, _cg), _byteVal, cursor);
+        else
+            cursor = generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, _initReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset, _cg), cursor);
+        cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, 254,
+            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset + 1, _cg),
+            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset, _cg), cursor);
+
+        // Capture the base address of the filled block 0 as the stable source.
+        _baseReg = _cg->allocateRegister();
+        cursor = generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _baseReg,
+            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset, _cg), cursor);
+
+        if (largeCopies < _maxCopies) {
+            // Unrolled path: emit one non-destructive MVC(255) per remaining block
+
+            // Adjust base address if total displacement would exceed 4K.
+            if (largeCopies * 256 + _offset >= 4096) {
+                cursor = generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                    new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset, _cg), cursor);
+                _offset = 0;
+            }
+
+            int64_t copies = largeCopies;
+            // From block 1 onwards, do full MVC(255)
+            for (int64_t i = 1; i <= copies - 1; ++i) {
+                int32_t dst_off = (int32_t)(_offset + i * 256);
+                cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, 255,
+                    new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, dst_off, _cg),
+                    new (_cg->trHeapMemory()) TR::MemoryReference(_baseReg, 0, _cg), cursor);
+            }
+            len = len - (uint64_t)(copies * 256);
+            _length = (int64_t)len;
+            // Advance _dstReg past the filled blocks so generateRemainder() can use offset 0,
+            // which keeps the source offset into _baseReg at 0 (stable block 0).
+            if (len > 0) {
+                cursor = generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                    new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset + copies * 256, _cg), cursor);
+            }
+            _offset = 0;
+        } else {
+            // Loop path: load itersReg = largeCopies - 1, advance dstReg past block 0,
+            // then do MVC(255) from stable source each iter
+            if (_itersReg == NULL)
+                _itersReg = (_tmpReg == NULL ? _cg->allocateRegister() : _tmpReg);
+
+            if (_cg->comp()->target().is64Bit())
+                cursor = genLoadLongConstant(_cg, _rootNode, largeCopies - 1, _itersReg, cursor, NULL, NULL);
+            else
+                cursor = generateLoad32BitConstant(_cg, _rootNode, (int32_t)(largeCopies - 1), _itersReg, true, cursor,
+                    NULL, NULL);
+
+            // Advance dstReg to starting block (block 0 already filled)
+            cursor = generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, _offset + 256, _cg), cursor);
+
+            TR::LabelSymbol *topOfLoop = generateLabelSymbol(_cg);
+            TR::LabelSymbol *bottomOfLoop = generateLabelSymbol(_cg);
+
+            _startControlFlow = cursor
+                = generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfLoop, cursor);
+
+            cursor = generateSS1Instruction(_cg, TR::InstOpCode::MVC, _rootNode, 255,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 0, _cg),
+                new (_cg->trHeapMemory()) TR::MemoryReference(_baseReg, 0, _cg), cursor);
+
+            cursor = generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 256, _cg), cursor);
+
+            cursor = generateS390BranchInstruction(_cg, TR::InstOpCode::BRCT, _rootNode, _itersReg, topOfLoop, cursor);
+
+            cursor = generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, bottomOfLoop, cursor);
+
+            len = len - (uint64_t)(largeCopies * 256);
+            _length = (int64_t)len;
+            _offset = 0; // dstReg now already point past the last full block
+
+            _cg->stopUsingRegister(_itersReg);
+        }
+
+        // Point _srcReg at _baseReg so generateRemainder() reads from the stable block 0.
+        _srcReg = _baseReg;
+        _cursor = cursor;
+        return cursor;
+    }
 
     // Pre-loop seed ONLY for the disabled (original) path.
     if (disableMemInitMVCSeedOpt && len >= (uint64_t)1) {
@@ -1179,10 +1275,11 @@ TR::Instruction *MemInitConstLenMacroOp::generateInstruction(int32_t offset, int
         return cursor;
     }
 
-    if (_dstNode == _srcNode) {
-        _srcMR = generateS390MemoryReference(*_dstMR, offset, _cg);
-    } else if (_srcReg != NULL) {
+    // Set _srcMR from _srcReg when set explicitly (stable-source opt)
+    if (_srcReg != NULL) {
         _srcMR = new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, offset, _cg);
+    } else if (_dstNode == _srcNode) {
+        _srcMR = generateS390MemoryReference(*_dstMR, offset, _cg);
     } else {
         _srcMR = generateS390MemoryReference(_cg, _rootNode, _srcNode, offset, true);
     }

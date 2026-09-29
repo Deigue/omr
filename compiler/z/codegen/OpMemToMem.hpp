@@ -324,6 +324,7 @@ public:
         : MemToMemConstLenMacroOp(rootNode, dstNode, dstNode, cg, length)
         , _initReg(initReg)
         , _useByteVal(false)
+        , _baseReg(NULL)
     {}
 
     MemInitConstLenMacroOp(TR::Node *rootNode, TR::Node *dstNode, TR::CodeGenerator *cg, int64_t length, int8_t byteVal)
@@ -331,6 +332,7 @@ public:
         , _initReg(NULL)
         , _useByteVal(true)
         , _byteVal(byteVal)
+        , _baseReg(NULL)
     {}
 
 protected:
@@ -341,6 +343,7 @@ protected:
 
 private:
     TR::Register *_initReg;
+    TR::Register *_baseReg; // Base addr used as stable MVC source when StableSourceOpt is active.
     bool _useByteVal;
     int8_t _byteVal;
 };
@@ -458,6 +461,7 @@ public:
         , _useByteVal(false)
         , _firstByteInitialized(false)
         , _litPoolReg(NULL)
+        , _baseReg(NULL)
     {}
 
     MemInitVarLenMacroOp(TR::Node *rootNode, TR::Node *dstNode, TR::CodeGenerator *cg, TR::Register *regLen,
@@ -468,6 +472,7 @@ public:
         , _byteVal(byteVal)
         , _firstByteInitialized(false)
         , _litPoolReg(NULL)
+        , _baseReg(NULL)
     {}
 
 protected:
@@ -479,13 +484,15 @@ protected:
 
     virtual Kind getKind() { return IsMemInit; }
 
-private:
+    // Fields accessed by MemToMemVarLenMacroOp::generateLoop() for stable-source optimization path.
     TR::Register *_initReg;
     TR::Register *_litPoolReg;
+    TR::Register *_baseReg; // Base addr used as stable MVC source when StableSourceOpt is active.
     bool _useByteVal;
     bool _firstByteInitialized;
     int8_t _byteVal;
 
+private:
     bool checkLengthAfterLoop() { return true; }
 };
 

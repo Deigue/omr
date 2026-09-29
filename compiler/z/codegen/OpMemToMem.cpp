@@ -649,19 +649,21 @@ TR::SymbolReference *BitOpMemVarLenMacroOp::getHelperSymRef()
 
 TR::RegisterDependencyConditions *MemInitConstLenMacroOp::generateDependencies()
 {
-    if (!(_dstReg || _itersReg || _initReg) || !needDependencies())
+    if (!(_dstReg || _itersReg || _initReg || _baseReg) || !needDependencies())
         return NULL;
 
     TR::RegisterDependencyConditions *dependencies;
 
     if (noLoop()) {
-        dependencies = generateRegisterDependencyConditions(0, 2, _cg);
+        dependencies = generateRegisterDependencyConditions(0, 3, _cg);
         if (_dstReg)
             dependencies->addPostCondition(_dstReg, TR::RealRegister::AssignAny);
         if (_initReg)
             dependencies->addPostCondition(_initReg, TR::RealRegister::AssignAny);
+        if (_baseReg)
+            dependencies->addPostCondition(_baseReg, TR::RealRegister::AssignAny);
     } else {
-        dependencies = generateRegisterDependencyConditions(0, 3, _cg);
+        dependencies = generateRegisterDependencyConditions(0, 4, _cg);
         if (useEXForRemainder()) {
             dependencies->addPostCondition(_dstReg, TR::RealRegister::AssignAny, RefsAndDefsDependentRegister);
             if (_initReg)
@@ -673,6 +675,8 @@ TR::RegisterDependencyConditions *MemInitConstLenMacroOp::generateDependencies()
                 dependencies->addPostCondition(_initReg, TR::RealRegister::GPR2);
             dependencies->addPostCondition(_itersReg, TR::RealRegister::GPR0);
         }
+        if (_baseReg)
+            dependencies->addPostCondition(_baseReg, TR::RealRegister::AssignAny);
     }
     return dependencies;
 }
@@ -799,10 +803,10 @@ TR::RegisterDependencyConditions *MemCmpConstLenMacroOp::generateDependencies()
 
 TR::RegisterDependencyConditions *MemInitVarLenMacroOp::generateDependencies()
 {
-    if (!(_raReg || _dstReg || _srcReg || _initReg || _itersReg || _regLen || _litReg || _litPoolReg))
+    if (!(_raReg || _dstReg || _srcReg || _initReg || _itersReg || _regLen || _litReg || _litPoolReg || _baseReg))
         return NULL;
 
-    TR::RegisterDependencyConditions *dependencies = generateRegisterDependencyConditions(0, 7, _cg);
+    TR::RegisterDependencyConditions *dependencies = generateRegisterDependencyConditions(0, 8, _cg);
 
     if (_raReg)
         dependencies->addPostCondition(_raReg, _cg->getReturnAddressRegister());
@@ -882,6 +886,8 @@ TR::RegisterDependencyConditions *MemCpyVarLenMacroOp::generateDependencies()
         if (_itersReg)
             dependencies->addPostCondition(_itersReg, TR::RealRegister::GPR0);
     }
+    if (_baseReg)
+        dependencies->addPostCondition(_baseReg, TR::RealRegister::AssignAny);
     if (_regLen)
         dependencies->addPostCondition(_regLen, TR::RealRegister::AssignAny);
     if (_litReg)

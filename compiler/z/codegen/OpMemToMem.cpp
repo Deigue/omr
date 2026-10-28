@@ -19,6 +19,8 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0 OR GPL-2.0-only WITH OpenJDK-assembly-exception-1.0
  *******************************************************************************/
 
+ // Assisted-by: IBM Bob
+
 #include "z/codegen/OpMemToMem.hpp"
 
 #include <limits.h>
@@ -94,32 +96,23 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
         generateSrcMemRef(0);
         generateDstMemRef(0);
 
-        if (useOptimizedMemInit) {
-            // Set the condition code for the next BRC condition.
-            if (needs64BitOpCode)
-                generateRRInstruction(_cg, TR::InstOpCode::LTGR, _rootNode, _regLen, _regLen);
-            else
-                generateRRInstruction(_cg, TR::InstOpCode::LTR, _rootNode, _regLen, _regLen);
-
-            _doneLabel = generateLabelSymbol(_cg);
-            // Branch to "done" if length is not higher than 0.
-            _startControlFlow = generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BNH,
-                _rootNode, _doneLabel);
+        // Adjust _regLen and set condition code, then branch to "done" if no work remains.
+        if (useOptimizedMemInit && _lengthMinusOne) {
+            generateRIInstruction(_cg, (needs64BitOpCode) ? TR::InstOpCode::AGHI : TR::InstOpCode::AHI,
+                _rootNode, _regLen, 1);
+        } else if (!useOptimizedMemInit && !_lengthMinusOne) {
+            generateRIInstruction(_cg, (needs64BitOpCode) ? TR::InstOpCode::AGHI : TR::InstOpCode::AHI,
+                _rootNode, _regLen, -1);
         } else {
-            // non-Java specialization (initial / legacy implementation)
-            if (!_lengthMinusOne) {
-                generateRIInstruction(_cg, (needs64BitOpCode) ? TR::InstOpCode::AGHI : TR::InstOpCode::AHI, _rootNode,
-                    _regLen, -1);
-            }
-
-            if (_lengthMinusOne)
-                generateRRInstruction(_cg, TR::InstOpCode::LTR, _rootNode, _regLen,
-                    _regLen); // Because transformLengthMinusOneForMemoryOps uses TR::iadd
-
-            _doneLabel = generateLabelSymbol(_cg);
-            _startControlFlow = generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_BL,
-                _rootNode, _doneLabel);
+            // No AGHI, need explicit LTR/LTGR to set CC.
+            generateRRInstruction(_cg, (needs64BitOpCode) ? TR::InstOpCode::LTGR : TR::InstOpCode::LTR,
+                _rootNode, _regLen, _regLen);
         }
+
+        _doneLabel = generateLabelSymbol(_cg);
+        _startControlFlow = generateS390BranchInstruction(_cg, TR::InstOpCode::BRC,
+            useOptimizedMemInit ? TR::InstOpCode::COND_BNH : TR::InstOpCode::COND_BL,
+            _rootNode, _doneLabel);
     }
     // Don't seed on MemInitMVCSeedOpt path. MVC seed already happens within looping.
     if (kind == MemToMemMacroOp::IsMemInit && disableMemInitMVCSeedOpt) {

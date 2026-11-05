@@ -88,6 +88,22 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
     static bool disableMemInitMVCSeedOpt = (feGetEnv("TR_DisableMemInitMVCSeedOpt") != NULL);
     bool useOptimizedMemInit = (kind == MemToMemMacroOp::IsMemInit && !disableMemInitMVCSeedOpt);
 
+    // TR_MemInitMVCSeedUnrollFactor: number of 256-byte blocks handled per loop iteration.
+    static int unrollFactor = 1;
+    static bool unrollFactorRead = false;
+    if (!unrollFactorRead)
+        {
+        const char *envVal = feGetEnv("TR_MemInitMVCSeedUnrollFactor");
+        if (envVal != NULL)
+            {
+            int parsed = atoi(envVal);
+            if (parsed >= 2)
+                unrollFactor = parsed;
+            }
+        unrollFactorRead = true;
+        }
+    bool useUnrolledMemInit = (useOptimizedMemInit && unrollFactor >= 2);
+
     if (useEXForRemainder()) {
         // need to do this before the branch or some
         // instructions may not be executed. this is a problem
@@ -147,14 +163,26 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
     if (_itersReg == NULL)
         _itersReg = _cg->allocateRegister();
 
+    // Compute the shift amount for the loop iteration count.
+    // factor=1 → shift 8 (iters = regLen / 256)
+    // factor=2 → shift 9 (iters = regLen / 512)
+    // factor=N (power-of-2) → shift 8 + log2(N)
+    int loopShift = 8;
+    if (useUnrolledMemInit)
+        {
+        int f = unrollFactor;
+        while (f > 1) { loopShift++; f >>= 1; }
+        }
+    int loopStride = 256 * unrollFactor; // bytes advanced per loop iteration
+
     if (needs64BitOpCode) {
-        generateRSInstruction(_cg, TR::InstOpCode::SRAG, _rootNode, _itersReg, _regLen, 8);
+        generateRSInstruction(_cg, TR::InstOpCode::SRAG, _rootNode, _itersReg, _regLen, loopShift);
     } else {
         if (_cg->comp()->target().cpu.isAtLeast(OMR_PROCESSOR_S390_Z196)) {
-            generateRSInstruction(_cg, TR::InstOpCode::SRAK, _rootNode, _itersReg, _regLen, 8);
+            generateRSInstruction(_cg, TR::InstOpCode::SRAK, _rootNode, _itersReg, _regLen, loopShift);
         } else {
             generateRRInstruction(_cg, TR::InstOpCode::LR, _rootNode, _itersReg, _regLen);
-            generateRSInstruction(_cg, TR::InstOpCode::SRA, _rootNode, _itersReg, 8);
+            generateRSInstruction(_cg, TR::InstOpCode::SRA, _rootNode, _itersReg, loopShift);
         }
     }
 
@@ -162,12 +190,22 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
 
     generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, topOfLoop);
 
-    generateInstruction(0, 256);
+    if (useUnrolledMemInit)
+        {
+        // Unrolled loop body: emit unrollFactor 256-byte blocks per iteration using
+        // fixed displacements (no LA between blocks), then a single LA by loopStride.
+        for (int i = 0; i < unrollFactor; ++i)
+            generateInstruction(i * 256, 256);
+        }
+    else
+        {
+        generateInstruction(0, 256);
+        }
     generateRXInstruction(_cg, TR::InstOpCode::LA, _srcNode, _srcReg,
-        new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, 256, _cg));
+        new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, loopStride, _cg));
     if (_srcReg != _dstReg) {
         generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
-            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 256, _cg));
+            new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, loopStride, _cg));
     }
 
     generateS390BranchInstruction(_cg, TR::InstOpCode::BRCT, _rootNode, _itersReg, topOfLoop);
@@ -189,6 +227,26 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
     }
 
     TR::Instruction *cursor = generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, bottomOfLoop);
+
+    // Post-loop peel: when the unrolled loop runs (factor >= 2), there may be a leftover
+    // 256-byte block that the loop skipped (when total 256-block count was odd).
+    // Test bit 8 of regLen (= 256): if set, one more 256-byte block needs to be handled
+    // before the sub-256 remainder.
+    if (useUnrolledMemInit)
+        {
+        TR::LabelSymbol *afterPeel = generateLabelSymbol(_cg);
+        // TMLL tests the low 16 bits of regLen; bit mask 0x100 = bit 8 = value 256.
+        generateRIInstruction(_cg, TR::InstOpCode::TMLL, _rootNode, _regLen, 0x100);
+        generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_MASK8, _rootNode, afterPeel);
+        // Peel block: one 256-byte block at offset 0 of current base registers.
+        generateInstruction(0, 256);
+        generateRXInstruction(_cg, TR::InstOpCode::LA, _srcNode, _srcReg,
+            new (_cg->trHeapMemory()) TR::MemoryReference(_srcReg, 256, _cg));
+        if (_srcReg != _dstReg)
+            generateRXInstruction(_cg, TR::InstOpCode::LA, _dstNode, _dstReg,
+                new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, 256, _cg));
+        cursor = generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, afterPeel);
+        }
 
     _cg->stopUsingRegister(_itersReg);
 

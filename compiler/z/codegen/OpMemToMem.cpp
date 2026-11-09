@@ -72,6 +72,13 @@ bool MemToMemMacroOp::enableMemInitMVCSeedOpt()
     return enable;
 }
 
+int32_t MemToMemMacroOp::memInitSTCChainMax()
+{
+    static const char *env = feGetEnv("TR_MemInitSTCChainMax");
+    static int32_t val = (env != NULL) ? atoi(env) : 12;
+    return val;
+}
+
 /**
  * Generate the loop that will perform a memory-to-memory instruction
  * on 256 bytes.
@@ -1278,6 +1285,19 @@ TR::Instruction *MemInitConstLenMacroOp::generateInstruction(int32_t offset, int
         }
 
         cursor = _cg->getAppendInstruction();
+
+        // Short lengths: a chain of single-byte stores is cheaper than STC seed + MVC.
+        if (length >= 2 && length <= memInitSTCChainMax()) {
+            for (int64_t i = 0; i < length; ++i) {
+                TR::MemoryReference *mr = (i == 0) ? dstMR0 : generateS390MemoryReference(*dstMR0, i, _cg);
+                if (_useByteVal)
+                    cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode, mr, _byteVal, cursor);
+                else
+                    cursor = generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, _initReg, mr, cursor);
+            }
+            return cursor;
+        }
+
         if (_useByteVal)
             cursor = generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode, dstMR0, _byteVal, cursor);
         else

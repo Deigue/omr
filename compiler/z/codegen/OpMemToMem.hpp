@@ -176,6 +176,11 @@ protected:
 
     static bool enableMemInitMVCSeedOpt();
 
+    /**
+     * Max length (inclusive) upto which the MemInit MVC seed opt path emits a chain of single-byte stores
+     */
+    static int32_t memInitSTCChainMax();
+
     virtual TR::Instruction *generateLoop() = 0;
     virtual TR::Instruction *generateRemainder() = 0;
     virtual TR::RegisterDependencyConditions *generateDependencies() = 0;

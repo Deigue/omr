@@ -135,6 +135,11 @@ TR::Instruction *MemToMemVarLenMacroOp::generateLoop()
         _doneLabel = generateLabelSymbol(_cg);
         _startControlFlow = generateS390BranchInstruction(_cg, TR::InstOpCode::BRC,
             useOptimizedMemInit ? TR::InstOpCode::COND_BNH : TR::InstOpCode::COND_BL, _rootNode, _doneLabel);
+
+        // Try chain of single-byte stores for small lengths, that exits to _doneLabel,
+        // bypassing the 256-byte loop and the EX remainder.
+        if (useOptimizedMemInit)
+            generateSmallLenChain();
     }
     // Don't seed on MemInitMVCSeedOpt path. MVC seed already happens within looping.
     if (kind == MemToMemMacroOp::IsMemInit && !enableMemInitMVCSeedOpt()) {
@@ -1200,6 +1205,38 @@ TR::Instruction *MemInitVarLenMacroOp::generateRemainder()
             _doneLabel); // required as main logic branches here
 
     return _cursor;
+}
+
+void MemInitVarLenMacroOp::generateSmallLenChain()
+{
+    const int32_t chainMax = memInitSTCChainMax();
+    if (chainMax < 2)
+        return;
+
+    const bool is64Bit = _cg->comp()->target().is64Bit();
+    const TR::InstOpCode::Mnemonic cmpOp = is64Bit ? TR::InstOpCode::CG : TR::InstOpCode::C;
+
+    // If larger than max chain length, skip the store chain and go back to regular loop / EX handling.
+    TR::LabelSymbol *largePathLabel = generateLabelSymbol(_cg);
+    generateS390CompareAndBranchInstruction(_cg, cmpOp, _rootNode, _regLen, chainMax, TR::InstOpCode::COND_BH,
+        largePathLabel, false, false);
+
+    // 1 <= _regLen <= chainMax. Byte 0 is always stored; byte i is stored only if _regLen > i.
+    for (int32_t i = 0; i < chainMax; ++i) {
+        if (i > 0)
+            generateS390CompareAndBranchInstruction(_cg, cmpOp, _rootNode, _regLen, i, TR::InstOpCode::COND_BNH,
+                _doneLabel, false, false);
+
+        TR::MemoryReference *mr = new (_cg->trHeapMemory()) TR::MemoryReference(_dstReg, i, _cg);
+        if (_useByteVal)
+            generateSIInstruction(_cg, TR::InstOpCode::MVI, _rootNode, mr, _byteVal);
+        else
+            generateRXInstruction(_cg, TR::InstOpCode::STC, _rootNode, _initReg, mr);
+    }
+
+    // unconditional branch to done since all indices filled
+    generateS390BranchInstruction(_cg, TR::InstOpCode::BRC, TR::InstOpCode::COND_MASK15, _rootNode, _doneLabel);
+    generateS390LabelInstruction(_cg, TR::InstOpCode::label, _rootNode, largePathLabel);
 }
 
 TR::Instruction *MemClearVarLenMacroOp::generateRemainder()

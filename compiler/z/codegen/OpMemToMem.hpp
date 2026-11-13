@@ -312,6 +312,8 @@ protected:
 
     virtual TR::Instruction *generateLoop();
     virtual TR::Instruction *generateRemainder();
+    virtual void generateSmallLenChain() {}
+
     virtual intptr_t getHelper() = 0;
     virtual TR::SymbolReference *getHelperSymRef() = 0;
     virtual TR::Instruction *generateInstruction(int32_t offset, int64_t length) = 0;
@@ -493,6 +495,7 @@ protected:
     virtual TR::SymbolReference *getHelperSymRef();
     virtual TR::RegisterDependencyConditions *generateDependencies();
     virtual TR::Instruction *generateRemainder();
+    virtual void generateSmallLenChain();
 
     virtual Kind getKind() { return IsMemInit; }
 
